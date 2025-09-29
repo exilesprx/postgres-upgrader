@@ -11,6 +11,7 @@ from postgres_updater import (
     get_volumes,
     parse_docker_compose,
     extract_location,
+    create_volume_info,
 )
 
 
@@ -131,3 +132,65 @@ class TestExtractLocation:
         """Test extracting location from empty volume list."""
         result = extract_location("backups", [])
         assert result is None
+
+
+class TestCreateVolumeInfo:
+    """Test volume information structure creation."""
+
+    def test_create_volume_info_complete(self):
+        """Test creating volume info with valid main and backup volumes."""
+        service_name = "postgres"
+        main_volume = "database:/var/lib/postgresql/data"
+        backup_volume = "backups:/var/lib/postgresql/backups"
+        all_volumes = [main_volume, backup_volume]
+
+        result = create_volume_info(
+            service_name, main_volume, backup_volume, all_volumes
+        )
+
+        expected = {
+            "service": {
+                "name": "postgres",
+                "volumes": {
+                    "backup": {
+                        "dir": "/var/lib/postgresql/backups",
+                        "name": "backups",
+                    },
+                    "main": {
+                        "dir": "/var/lib/postgresql/data",
+                        "name": "database",
+                    },
+                },
+            }
+        }
+
+        assert result == expected
+
+    def test_create_volume_info_missing_volumes(self):
+        """Test creating volume info when volumes are not found in the list."""
+        service_name = "redis"
+        main_volume = "missing-main:/data"
+        backup_volume = "missing-backup:/backup"
+        all_volumes = ["different-volume:/other/path"]
+
+        result = create_volume_info(
+            service_name, main_volume, backup_volume, all_volumes
+        )
+
+        expected = {
+            "service": {
+                "name": "redis",
+                "volumes": {
+                    "backup": {
+                        "dir": None,
+                        "name": None,
+                    },
+                    "main": {
+                        "dir": None,
+                        "name": None,
+                    },
+                },
+            }
+        }
+
+        assert result == expected

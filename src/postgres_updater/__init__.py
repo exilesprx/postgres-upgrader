@@ -8,5 +8,7 @@ from .compose_inspector import (
     get_volumes,
     parse_docker_compose,
     extract_location,
+    extract_name,
+    create_volume_info,
 )
 from .prompt import prompt_user_choice

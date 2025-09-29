@@ -38,6 +38,36 @@ def get_volumes(file_path, service_name):
     return service.get("volumes", [])
 
 
+def create_volume_info(service_name, main_volume, backup_volume, all_volumes):
+    """
+    Create structured volume information for a service.
+
+    Args:
+        service_name: Name of the Docker service
+        main_volume: Main volume string (e.g., "database:/var/lib/postgresql/data")
+        backup_volume: Backup volume string (e.g., "backups:/var/lib/postgresql/backups")
+        all_volumes: List of all volumes for the service
+
+    Returns:
+        Dictionary with structured volume information
+    """
+    return {
+        "service": {
+            "name": service_name,
+            "volumes": {
+                "backup": {
+                    "dir": extract_location(backup_volume, all_volumes),
+                    "name": extract_name(backup_volume, all_volumes),
+                },
+                "main": {
+                    "dir": extract_location(main_volume, all_volumes),
+                    "name": extract_name(main_volume, all_volumes),
+                },
+            },
+        }
+    }
+
+
 def identity_volumes(file_path):
     """
     Interactive version of find_location with user prompts.
@@ -64,22 +94,13 @@ def identity_volumes(file_path):
     if not main:
         return None
 
-    volumes.remove(main)
+    # Create a list of remaining volumes for backup selection
+    remaining_volumes = [v for v in volumes if v != main]
 
-    # Let user choose volume
-    backup = prompt_user_choice(volumes, "Select the backup volume:")
+    # Let user choose backup volume
+    backup = prompt_user_choice(remaining_volumes, "Select the backup volume:")
     if not backup:
         return None
 
-    # Extract location from chosen volume
-    return {
-        "service": service,
-        "backup": {
-            "dir": extract_location(backup, volumes),
-            "name": extract_name(backup, volumes),
-        },
-        "volume": {
-            "dir": extract_location(main, volumes),
-            "name": extract_name(main, volumes),
-        },
-    }
+    # Create and return structured volume information
+    return create_volume_info(service, main, backup, volumes)
