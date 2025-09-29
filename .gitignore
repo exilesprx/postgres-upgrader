@@ -8,3 +8,7 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Compose file for testing
+docker-compose.yml
+docker-compose.*.yml
