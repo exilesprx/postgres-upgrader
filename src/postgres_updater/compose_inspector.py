@@ -66,7 +66,7 @@ def create_volume_info(service_name, main_volume, backup_volume, all_volumes):
     }
 
 
-def identity_volumes(file_path):
+def identify_service_volumes(file_path):
     """
     Interactive version of find_location with user prompts.
     Separated for better testability.

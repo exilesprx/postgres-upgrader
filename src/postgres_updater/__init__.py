@@ -3,7 +3,7 @@ PostgreSQL Docker Compose updater package.
 """
 
 from .compose_inspector import (
-    identity_volumes,
+    identify_service_volumes,
     get_services,
     get_volumes,
     parse_docker_compose,

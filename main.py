@@ -4,7 +4,7 @@ PostgreSQL Docker Compose backup location extractor.
 """
 
 import sys
-from postgres_updater import identity_volumes
+from postgres_updater import identify_service_volumes
 
 
 def main():
@@ -14,7 +14,7 @@ def main():
         sys.exit(1)
 
     compose_file = sys.argv[1]
-    selections = identity_volumes(compose_file)
+    selections = identify_service_volumes(compose_file)
 
     if selections:
         print(f"Location: {selections}")
