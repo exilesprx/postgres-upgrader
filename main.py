@@ -1,4 +1,4 @@
-from src.docker_utils import backup_location
+from postgres_updater import backup_location
 
 
 def main():
