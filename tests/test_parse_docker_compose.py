@@ -2,10 +2,16 @@
 Tests for Docker Compose parsing functionality.
 Tests the actual building blocks that the application uses.
 """
+
 import tempfile
 import os
 import pytest
-from postgres_updater import get_services, get_volumes, parse_docker_compose, extract_location
+from postgres_updater import (
+    get_services,
+    get_volumes,
+    parse_docker_compose,
+    extract_location,
+)
 
 
 @pytest.fixture
@@ -40,7 +46,7 @@ volumes:
 @pytest.fixture
 def compose_file(sample_compose_content):
     """Create a temporary docker-compose.yml file."""
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.yml', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as f:
         f.write(sample_compose_content)
         f.flush()
         yield f.name
@@ -49,11 +55,11 @@ def compose_file(sample_compose_content):
 
 class TestParseDockerCompose:
     """Test Docker Compose YAML parsing."""
-    
+
     def test_parse_docker_compose(self, compose_file):
         """Test that Docker Compose YAML is parsed correctly."""
         result = parse_docker_compose(compose_file)
-        
+
         assert "services" in result
         assert "postgres" in result["services"]
         assert "nginx" in result["services"]
@@ -62,11 +68,11 @@ class TestParseDockerCompose:
 
 class TestGetServices:
     """Test service extraction from Docker Compose files."""
-    
+
     def test_get_services(self, compose_file):
         """Test getting list of services."""
         services = get_services(compose_file)
-        
+
         assert isinstance(services, list)
         assert "postgres" in services
         assert "nginx" in services
@@ -75,55 +81,52 @@ class TestGetServices:
 
 class TestGetVolumes:
     """Test volume extraction for specific services."""
-    
+
     def test_get_volumes_postgres(self, compose_file):
         """Test getting volumes for postgres service."""
         volumes = get_volumes(compose_file, "postgres")
-        
+
         assert isinstance(volumes, list)
         assert len(volumes) == 2
         assert "database:/var/lib/postgresql/data" in volumes
         assert "backups:/var/lib/postresql/backups" in volumes
-    
+
     def test_get_volumes_nginx(self, compose_file):
         """Test getting volumes for nginx service."""
         volumes = get_volumes(compose_file, "nginx")
-        
+
         assert isinstance(volumes, list)
         assert len(volumes) == 2
         assert "./nginx.conf:/etc/nginx/nginx.conf" in volumes
         assert "logs:/var/log/nginx" in volumes
-    
+
     def test_get_volumes_nonexistent_service(self, compose_file):
         """Test getting volumes for non-existent service."""
         volumes = get_volumes(compose_file, "nonexistent")
-        
+
         assert volumes == []
 
 
 class TestExtractLocation:
     """Test location extraction from volume strings."""
-    
+
     def test_extract_location_found(self):
         """Test extracting location when pattern is found."""
         volumes = [
             "database:/var/lib/postgresql/data",
-            "backups:/var/lib/postresql/backups"
+            "backups:/var/lib/postresql/backups",
         ]
-        
+
         result = extract_location("backups", volumes)
         assert result == "/var/lib/postresql/backups"
-    
+
     def test_extract_location_not_found(self):
         """Test extracting location when pattern is not found."""
-        volumes = [
-            "database:/var/lib/postgresql/data",
-            "logs:/var/log/nginx"
-        ]
-        
+        volumes = ["database:/var/lib/postgresql/data", "logs:/var/log/nginx"]
+
         result = extract_location("backups", volumes)
         assert result is None
-    
+
     def test_extract_location_empty_volumes(self):
         """Test extracting location from empty volume list."""
         result = extract_location("backups", [])
