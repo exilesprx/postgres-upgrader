@@ -12,7 +12,12 @@ def backup_location(file_path):
 
     services = compose_data.get("services", {})
     postgres_service = services.get("postgres")
-    volumes = postgres_service.get("volumes", {})
+    if not postgres_service:
+        return None
+
+    volumes = postgres_service.get("volumes", [])
     for volume in volumes:
         if "backups" in volume:
             return volume.split(":")[1]
+
+    return None
