@@ -27,15 +27,13 @@ def extract_name(want, volumes):
 def get_services(file_path):
     """Get list of services from a Docker Compose file."""
     compose_data = parse_docker_compose(file_path)
-    return list(compose_data.get("services", {}).keys())
+    return compose_data.get("services", {})
 
 
-def get_volumes(file_path, service_name):
+def get_volumes(service, service_name):
     """Get list of volumes for a specific service."""
-    compose_data = parse_docker_compose(file_path)
-    services = compose_data.get("services", {})
-    service = services.get(service_name, {})
-    return service.get("volumes", [])
+    service_items = service.get(service_name, {})
+    return service_items.get("volumes", [])
 
 
 def create_volume_info(service_name, main_volume, backup_volume, all_volumes):
@@ -85,7 +83,7 @@ def identity_volumes(file_path):
         return None
 
     # Get volumes for chosen service
-    volumes = get_volumes(file_path, service)
+    volumes = get_volumes(services, service)
     if not volumes:
         return None
 
