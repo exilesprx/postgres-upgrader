@@ -1,3 +1,7 @@
+import docker
+import yaml
+
+
 def main():
     print("Hello from postgres-updater!")
 
