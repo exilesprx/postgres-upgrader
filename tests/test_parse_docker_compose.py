@@ -1,5 +1,5 @@
 import pytest
-from docker_utils import backup_location
+from src.docker_utils import backup_location
 
 
 @pytest.fixture
