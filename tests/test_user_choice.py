@@ -3,8 +3,8 @@ Tests for user choice functionality with inquirer and text fallback.
 """
 import pytest
 from unittest.mock import patch, MagicMock
-from postgres_updater import prompt_user_choice
-from postgres_updater.prompt import _simple_text_choice
+from postgres_upgrader import prompt_user_choice
+from postgres_upgrader.prompt import _simple_text_choice
 
 
 class TestInquirerChoice:

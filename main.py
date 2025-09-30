@@ -4,7 +4,7 @@ PostgreSQL Docker Compose backup location extractor.
 """
 
 import sys
-from postgres_updater import identify_service_volumes
+from postgres_upgrader import identify_service_volumes
 
 
 def main():

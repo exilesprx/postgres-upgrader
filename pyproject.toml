@@ -1,5 +1,5 @@
 [project]
-name = "postgres-updater"
+name = "postgres-upgrader"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"

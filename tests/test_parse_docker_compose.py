@@ -6,7 +6,7 @@ Tests the actual building blocks that the application uses.
 import tempfile
 import os
 import pytest
-from postgres_updater import (
+from postgres_upgrader import (
     get_services,
     get_volumes,
     parse_docker_compose,
