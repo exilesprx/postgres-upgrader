@@ -72,7 +72,8 @@ class TestGetServices:
 
     def test_get_services(self, compose_file):
         """Test getting services dictionary."""
-        services = get_services(compose_file)
+        compose_data = parse_docker_compose(compose_file)
+        services = get_services(compose_data)
 
         assert isinstance(services, dict)
         assert "postgres" in services
@@ -85,7 +86,8 @@ class TestGetVolumes:
 
     def test_get_volumes_postgres(self, compose_file):
         """Test getting volumes for postgres service."""
-        services = get_services(compose_file)
+        compose_data = parse_docker_compose(compose_file)
+        services = get_services(compose_data)
         volumes = get_volumes(services, "postgres")
 
         assert isinstance(volumes, list)
@@ -95,7 +97,8 @@ class TestGetVolumes:
 
     def test_get_volumes_nginx(self, compose_file):
         """Test getting volumes for nginx service."""
-        services = get_services(compose_file)
+        compose_data = parse_docker_compose(compose_file)
+        services = get_services(compose_data)
         volumes = get_volumes(services, "nginx")
 
         assert isinstance(volumes, list)
@@ -105,7 +108,8 @@ class TestGetVolumes:
 
     def test_get_volumes_nonexistent_service(self, compose_file):
         """Test getting volumes for non-existent service."""
-        services = get_services(compose_file)
+        compose_data = parse_docker_compose(compose_file)
+        services = get_services(compose_data)
         volumes = get_volumes(services, "nonexistent")
 
         assert volumes == []

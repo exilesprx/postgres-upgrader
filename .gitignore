@@ -12,3 +12,6 @@ wheels/
 # Compose file for testing
 docker-compose.yml
 docker-compose.*.yml
+
+# Env file for testing
+.env

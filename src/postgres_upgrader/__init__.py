@@ -3,12 +3,12 @@ PostgreSQL Docker Compose updater package.
 """
 
 from .compose_inspector import (
-    identify_service_volumes,
     get_services,
     get_volumes,
-    parse_docker_compose,
     extract_location,
     extract_name,
-    create_volume_info,
+    parse_docker_compose,
 )
-from .prompt import prompt_user_choice
+from .prompt import prompt_user_choice, identify_service_volumes, create_volume_info
+from .docker import export_postgres_data
+from .env import get_database_name, get_database_user
