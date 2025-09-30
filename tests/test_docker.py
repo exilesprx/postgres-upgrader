@@ -3,14 +3,14 @@ Tests for Docker backup functionality.
 """
 import pytest
 from unittest.mock import MagicMock, patch
-from postgres_upgrader import export_postgres_data
+from postgres_upgrader import create_postgres_backup
 
 
-class TestExportPostgresData:
-    """Test PostgreSQL backup export functionality."""
+class TestCreatePostgresBackup:
+    """Test PostgreSQL backup creation functionality."""
 
-    def test_export_postgres_data_parameters(self):
-        """Test that export_postgres_data function accepts correct parameters."""
+    def test_create_postgres_backup_parameters(self):
+        """Test that create_postgres_backup function accepts correct parameters."""
         # This test just verifies the function signature without Docker dependencies
         
         # Mock service config
@@ -20,7 +20,7 @@ class TestExportPostgresData:
         
         # The function should be callable with these parameters
         # We can't actually run it without Docker, but we can verify it exists
-        assert callable(export_postgres_data)
+        assert callable(create_postgres_backup)
         
         # Mock Docker to test the function structure
         with patch('postgres_upgrader.docker.docker.from_env') as mock_docker:
@@ -30,4 +30,4 @@ class TestExportPostgresData:
             
             # Should raise exception when no containers found
             with pytest.raises(Exception, match="No containers found"):
-                export_postgres_data("testuser", "testdb", service_config)
+                create_postgres_backup("testuser", "testdb", service_config)
