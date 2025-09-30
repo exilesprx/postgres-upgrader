@@ -5,6 +5,7 @@ PostgreSQL Docker Compose backup location extractor.
 
 import sys
 import os
+from typing import Tuple, Optional, Dict, Any
 from postgres_upgrader import (
     identify_service_volumes,
     export_postgres_data,
@@ -14,7 +15,7 @@ from postgres_upgrader.compose_inspector import get_services
 from postgres_upgrader.env import get_database_user, get_database_name
 
 
-def get_credentials(compose_data, service_name):
+def get_credentials(compose_data: Dict[str, Any], service_name: str) -> Tuple[Optional[str], Optional[str]]:
     """
     Get PostgreSQL credentials with .env fallback to Docker Compose.
 
@@ -44,7 +45,7 @@ def get_credentials(compose_data, service_name):
     return user, database
 
 
-def main():
+def main() -> None:
     """Main CLI entry point."""
     if len(sys.argv) < 2:
         print("Usage: ./main.py <docker-compose.yml>")

@@ -1,5 +1,4 @@
-# TODO: get user name from env
-# TODO: get database name from arg
+# TODO: prompt user to enter container user for postgres
 
 # Dump
 docker exec my_postgres_container pg_dumpall -U postgres \

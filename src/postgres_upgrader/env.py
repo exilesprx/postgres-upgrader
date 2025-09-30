@@ -1,7 +1,7 @@
 from dotenv import dotenv_values
 
 
-def _get_env_value(key):
+def _get_env_value(key: str) -> str:
     """Helper to get environment variable with consistent error handling."""
     config = dotenv_values(".env")
     value = config.get(key)
@@ -10,11 +10,11 @@ def _get_env_value(key):
     return value
 
 
-def get_database_name():
+def get_database_name() -> str:
     """Get the PostgreSQL database name from .env"""
     return _get_env_value("POSTGRES_DB")
 
 
-def get_database_user():
+def get_database_user() -> str:
     """Get the PostgreSQL user from .env"""
     return _get_env_value("POSTGRES_USER")
