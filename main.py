@@ -57,15 +57,15 @@ def main() -> None:
     except Exception as e:
         print(f"Error parsing Docker Compose file: {e}")
         sys.exit(1)
-    selections = identify_service_volumes(compose)
+    service_volume_config = identify_service_volumes(compose)
 
-    if not selections:
+    if not service_volume_config:
         print("No volumes found or selection cancelled")
         sys.exit(1)
 
-    print(f"Location: {selections}")
+    print(f"Backup location: {service_volume_config.backup_volume.dir}")
 
-    service_name = selections.name
+    service_name = service_volume_config.name
     if not service_name:
         print("Error: Service name not found in selection")
         sys.exit(1)
@@ -83,7 +83,7 @@ def main() -> None:
 
     try:
         with DockerManager() as docker_mgr:
-            docker_mgr.create_postgres_backup(user, database, selections)
+            docker_mgr.create_postgres_backup(user, database, service_volume_config)
     except Exception as e:
         print(f"Error creating backup: {e}")
         sys.exit(1)
