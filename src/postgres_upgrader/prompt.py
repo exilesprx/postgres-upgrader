@@ -10,13 +10,15 @@ if TYPE_CHECKING:
 @dataclass
 class VolumeInfo:
     """Information about a Docker volume."""
-    name: str
-    dir: str
+
+    name: str | None
+    dir: str | None
 
 
 @dataclass
 class ServiceVolumeConfig:
     """Configuration for a Docker service's volumes."""
+
     name: str
     main_volume: VolumeInfo
     backup_volume: VolumeInfo
@@ -75,16 +77,18 @@ def create_volume_info(
         name=service_name,
         main_volume=VolumeInfo(
             name=extract_name(main_volume, all_volumes),
-            dir=extract_location(main_volume, all_volumes)
+            dir=extract_location(main_volume, all_volumes),
         ),
         backup_volume=VolumeInfo(
             name=extract_name(backup_volume, all_volumes),
-            dir=extract_location(backup_volume, all_volumes)
-        )
+            dir=extract_location(backup_volume, all_volumes),
+        ),
     )
 
 
-def identify_service_volumes(data: "DockerComposeConfig") -> Optional[ServiceVolumeConfig]:
+def identify_service_volumes(
+    data: "DockerComposeConfig",
+) -> Optional[ServiceVolumeConfig]:
     """
     Interactive service and volume identification with user prompts.
 
@@ -110,7 +114,7 @@ def identify_service_volumes(data: "DockerComposeConfig") -> Optional[ServiceVol
     if not service:
         print(f"Service '{service_name}' not found.")
         return None
-        
+
     volumes = service.volumes
     if not volumes:
         print(f"No volumes found for service '{service_name}'.")
