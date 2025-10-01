@@ -8,7 +8,7 @@ import os
 from typing import Tuple, Optional, Dict, Any
 from postgres_upgrader import (
     identify_service_volumes,
-    create_postgres_backup,
+    DockerManager,
     parse_docker_compose,
 )
 from postgres_upgrader.compose_inspector import get_services
@@ -90,7 +90,8 @@ def main() -> None:
         sys.exit(1)
 
     try:
-        create_postgres_backup(user, database, selections)
+        with DockerManager() as docker_mgr:
+            docker_mgr.create_postgres_backup(user, database, selections)
     except Exception as e:
         print(f"Error creating backup: {e}")
         sys.exit(1)

@@ -134,7 +134,7 @@ if volume_config:
 from postgres_upgrader import (
     parse_docker_compose, 
     identify_service_volumes, 
-    create_postgres_backup,
+    DockerManager,
     get_database_user,
     get_database_name
 )
@@ -157,10 +157,12 @@ if volume_config:
         user = services.get(service_name, {}).get("environment", {}).get("POSTGRES_USER")
         database = services.get(service_name, {}).get("environment", {}).get("POSTGRES_DB")
     
-    # Create backup
-    backup_path = create_postgres_backup(user, database, volume_config)
-    print(f"Backup created: {backup_path}")
-```## Development
+    # Create backup using DockerManager
+    with DockerManager() as docker_mgr:
+        backup_path = docker_mgr.create_postgres_backup(user, database, volume_config)
+        print(f"Backup created: {backup_path}")
+```
+## Development
 
 ### Running Tests
 

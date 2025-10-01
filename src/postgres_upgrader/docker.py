@@ -1,29 +1,47 @@
 import docker
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 
-def create_postgres_backup(
-    user: str, database: str, service_config: Dict[str, Any]
-) -> str:
+class DockerManager:
     """
-    Export PostgreSQL data from a Docker container to a backup file.
-
-    Args:
-        user: PostgreSQL username for authentication
-        database: PostgreSQL database name to backup
-        service_config: Service volume information object containing:
-            - service.name: Name of the Docker Compose service
-            - service.volumes.backup.dir: Container path for backup storage (mapped to host via Docker volumes)
-
-    Returns:
-        str: Path to the created backup file (container path)
-
-    Raises:
-        Exception: If container not found, backup fails, or multiple containers exist
+    Context manager for Docker client operations.
+    Provides efficient client reuse across multiple operations.
     """
-    client = docker.from_env()
-    try:
+    
+    def __init__(self):
+        self.client: Optional[docker.DockerClient] = None
+    
+    def __enter__(self):
+        self.client = docker.from_env()
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.client:
+            self.client.close()
+    
+    def create_postgres_backup(
+        self, user: str, database: str, service_config: Dict[str, Any]
+    ) -> str:
+        """
+        Export PostgreSQL data from a Docker container to a backup file.
+
+        Args:
+            user: PostgreSQL username for authentication
+            database: PostgreSQL database name to backup
+            service_config: Service volume information object containing:
+                - service.name: Name of the Docker Compose service
+                - service.volumes.backup.dir: Container path for backup storage (mapped to host via Docker volumes)
+
+        Returns:
+            str: Path to the created backup file (container path)
+
+        Raises:
+            Exception: If container not found, backup fails, or multiple containers exist
+        """
+        if not self.client:
+            raise Exception("DockerManager not properly initialized. Use as context manager.")
+            
         # Extract service configuration with cleaner access pattern
         service_info = service_config.get("service", {})
         service_name = service_info.get("name")
@@ -34,7 +52,7 @@ def create_postgres_backup(
         if not backup_dir:
             raise Exception("Backup directory not found in configuration")
 
-        containers = client.containers.list(
+        containers = self.client.containers.list(
             filters={"label": f"com.docker.compose.service={service_name}"}
         )
 
@@ -60,10 +78,3 @@ def create_postgres_backup(
 
         print(f"Backup created successfully: {backup_path}")
         return backup_path
-
-    except docker.errors.NotFound as e:
-        raise Exception(f"Docker container not found: {e}")
-    except Exception as e:
-        raise Exception(f"Backup failed: {e}")
-    finally:
-        client.close()

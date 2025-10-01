@@ -10,7 +10,7 @@ from .compose_inspector import (
     parse_docker_compose,
 )
 from .prompt import prompt_user_choice, identify_service_volumes, create_volume_info
-from .docker import create_postgres_backup
+from .docker import DockerManager
 from .env import get_database_name, get_database_user
 
 __all__ = [
@@ -25,7 +25,7 @@ __all__ = [
     "identify_service_volumes",
     "create_volume_info",
     # Docker operations
-    "create_postgres_backup",
+    "DockerManager",
     # Environment functions
     "get_database_name",
     "get_database_user",
