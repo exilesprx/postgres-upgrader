@@ -7,11 +7,12 @@ import tempfile
 import os
 import pytest
 from postgres_upgrader import (
-    get_services,
-    get_volumes,
     parse_docker_compose,
     extract_location,
     create_volume_info,
+    ServiceVolumeConfig,
+    VolumeInfo,
+    DockerComposeConfig,
 )
 
 
@@ -61,10 +62,11 @@ class TestParseDockerCompose:
         """Test that Docker Compose YAML is parsed correctly."""
         result = parse_docker_compose(compose_file)
 
-        assert "services" in result
-        assert "postgres" in result["services"]
-        assert "nginx" in result["services"]
-        assert "volumes" in result
+        assert isinstance(result, DockerComposeConfig)
+        assert "postgres" in result.services
+        assert "nginx" in result.services
+        assert result.services["postgres"].name == "postgres"
+        assert result.services["nginx"].name == "nginx"
 
 
 class TestGetServices:
@@ -73,7 +75,7 @@ class TestGetServices:
     def test_get_services(self, compose_file):
         """Test getting services dictionary."""
         compose_data = parse_docker_compose(compose_file)
-        services = get_services(compose_data)
+        services = compose_data.services
 
         assert isinstance(services, dict)
         assert "postgres" in services
@@ -87,8 +89,7 @@ class TestGetVolumes:
     def test_get_volumes_postgres(self, compose_file):
         """Test getting volumes for postgres service."""
         compose_data = parse_docker_compose(compose_file)
-        services = get_services(compose_data)
-        volumes = get_volumes(services, "postgres")
+        volumes = compose_data.get_volumes("postgres")
 
         assert isinstance(volumes, list)
         assert len(volumes) == 2
@@ -98,8 +99,7 @@ class TestGetVolumes:
     def test_get_volumes_nginx(self, compose_file):
         """Test getting volumes for nginx service."""
         compose_data = parse_docker_compose(compose_file)
-        services = get_services(compose_data)
-        volumes = get_volumes(services, "nginx")
+        volumes = compose_data.get_volumes("nginx")
 
         assert isinstance(volumes, list)
         assert len(volumes) == 2
@@ -109,8 +109,7 @@ class TestGetVolumes:
     def test_get_volumes_nonexistent_service(self, compose_file):
         """Test getting volumes for non-existent service."""
         compose_data = parse_docker_compose(compose_file)
-        services = get_services(compose_data)
-        volumes = get_volumes(services, "nonexistent")
+        volumes = compose_data.get_volumes("nonexistent")
 
         assert volumes == []
 
@@ -155,21 +154,11 @@ class TestCreateVolumeInfo:
             service_name, main_volume, backup_volume, all_volumes
         )
 
-        expected = {
-            "service": {
-                "name": "postgres",
-                "volumes": {
-                    "backup": {
-                        "dir": "/var/lib/postgresql/backups",
-                        "name": "backups",
-                    },
-                    "main": {
-                        "dir": "/var/lib/postgresql/data",
-                        "name": "database",
-                    },
-                },
-            }
-        }
+        expected = ServiceVolumeConfig(
+            name="postgres",
+            main_volume=VolumeInfo(name="database", dir="/var/lib/postgresql/data"),
+            backup_volume=VolumeInfo(name="backups", dir="/var/lib/postgresql/backups")
+        )
 
         assert result == expected
 
@@ -184,20 +173,10 @@ class TestCreateVolumeInfo:
             service_name, main_volume, backup_volume, all_volumes
         )
 
-        expected = {
-            "service": {
-                "name": "redis",
-                "volumes": {
-                    "backup": {
-                        "dir": None,
-                        "name": None,
-                    },
-                    "main": {
-                        "dir": None,
-                        "name": None,
-                    },
-                },
-            }
-        }
+        expected = ServiceVolumeConfig(
+            name="redis",
+            main_volume=VolumeInfo(name=None, dir=None),
+            backup_volume=VolumeInfo(name=None, dir=None)
+        )
 
         assert result == expected

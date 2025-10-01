@@ -5,7 +5,7 @@ docker exec my_postgres_container pg_dumpall -U postgres \
   > /var/lib/postgresql/backups/backup-{date}.sql
 
 # Stop old container
-docker compose down
+docker compose down postgres
 
 # Pull latest change
 docker compose pull postgres

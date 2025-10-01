@@ -5,18 +5,20 @@ PostgreSQL Docker Compose backup location extractor.
 
 import sys
 import os
-from typing import Tuple, Optional, Dict, Any
+from typing import Tuple, Optional, TYPE_CHECKING
 from postgres_upgrader import (
     identify_service_volumes,
     DockerManager,
     parse_docker_compose,
 )
-from postgres_upgrader.compose_inspector import get_services
 from postgres_upgrader.env import get_database_user, get_database_name
+
+if TYPE_CHECKING:
+    from postgres_upgrader.compose_inspector import DockerComposeConfig
 
 
 def get_credentials(
-    compose_data: Dict[str, Any], service_name: str
+    compose_data: "DockerComposeConfig", service_name: str
 ) -> Tuple[Optional[str], Optional[str]]:
     """
     Get PostgreSQL credentials with .env fallback to Docker Compose.
@@ -27,22 +29,12 @@ def get_credentials(
     try:
         user = get_database_user()
     except Exception:
-        user = (
-            get_services(compose_data)
-            .get(service_name, {})
-            .get("environment", {})
-            .get("POSTGRES_USER")
-        )
+        user = compose_data.get_postgres_user(service_name)
 
     try:
         database = get_database_name()
     except Exception:
-        database = (
-            get_services(compose_data)
-            .get(service_name, {})
-            .get("environment", {})
-            .get("POSTGRES_DB")
-        )
+        database = compose_data.get_postgres_db(service_name)
 
     return user, database
 
@@ -73,7 +65,7 @@ def main() -> None:
 
     print(f"Location: {selections}")
 
-    service_name = selections.get("service", {}).get("name")
+    service_name = selections.name
     if not service_name:
         print("Error: Service name not found in selection")
         sys.exit(1)

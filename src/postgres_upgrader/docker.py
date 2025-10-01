@@ -1,6 +1,9 @@
 import docker
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .prompt import ServiceVolumeConfig
 
 
 class DockerManager:
@@ -21,7 +24,7 @@ class DockerManager:
             self.client.close()
 
     def create_postgres_backup(
-        self, user: str, database: str, service_config: Dict[str, Any]
+        self, user: str, database: str, service_config: "ServiceVolumeConfig"
     ) -> str:
         """
         Export PostgreSQL data from a Docker container to a backup file.
@@ -29,9 +32,7 @@ class DockerManager:
         Args:
             user: PostgreSQL username for authentication
             database: PostgreSQL database name to backup
-            service_config: Service volume information object containing:
-                - service.name: Name of the Docker Compose service
-                - service.volumes.backup.dir: Container path for backup storage (mapped to host via Docker volumes)
+            service_config: ServiceVolumeConfig object with service and volume information
 
         Returns:
             str: Path to the created backup file (container path)
@@ -44,10 +45,8 @@ class DockerManager:
                 "DockerManager not properly initialized. Use as context manager."
             )
 
-        # Extract service configuration with cleaner access pattern
-        service_info = service_config.get("service", {})
-        service_name = service_info.get("name")
-        backup_dir = service_info.get("volumes", {}).get("backup", {}).get("dir")
+        service_name = service_config.name
+        backup_dir = service_config.backup_volume.dir
 
         if not service_name:
             raise Exception("Service name not found in configuration")

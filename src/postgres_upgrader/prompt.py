@@ -1,6 +1,25 @@
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, TYPE_CHECKING
+from dataclasses import dataclass
 import inquirer
-from .compose_inspector import extract_location, extract_name, get_services, get_volumes
+from .compose_inspector import extract_location, extract_name
+
+if TYPE_CHECKING:
+    from .compose_inspector import DockerComposeConfig
+
+
+@dataclass
+class VolumeInfo:
+    """Information about a Docker volume."""
+    name: str
+    dir: str
+
+
+@dataclass
+class ServiceVolumeConfig:
+    """Configuration for a Docker service's volumes."""
+    name: str
+    main_volume: VolumeInfo
+    backup_volume: VolumeInfo
 
 
 def prompt_user_choice(
@@ -39,7 +58,7 @@ def prompt_user_choice(
 
 def create_volume_info(
     service_name: str, main_volume: str, backup_volume: str, all_volumes: List[str]
-) -> Dict[str, Any]:
+) -> ServiceVolumeConfig:
     """
     Create structured volume information for a service.
 
@@ -50,26 +69,22 @@ def create_volume_info(
         all_volumes: List of all volumes for the service
 
     Returns:
-        Dictionary with structured volume information
+        ServiceVolumeConfig with structured volume information
     """
-    return {
-        "service": {
-            "name": service_name,
-            "volumes": {
-                "backup": {
-                    "dir": extract_location(backup_volume, all_volumes),
-                    "name": extract_name(backup_volume, all_volumes),
-                },
-                "main": {
-                    "dir": extract_location(main_volume, all_volumes),
-                    "name": extract_name(main_volume, all_volumes),
-                },
-            },
-        }
-    }
+    return ServiceVolumeConfig(
+        name=service_name,
+        main_volume=VolumeInfo(
+            name=extract_name(main_volume, all_volumes),
+            dir=extract_location(main_volume, all_volumes)
+        ),
+        backup_volume=VolumeInfo(
+            name=extract_name(backup_volume, all_volumes),
+            dir=extract_location(backup_volume, all_volumes)
+        )
+    )
 
 
-def identify_service_volumes(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def identify_service_volumes(data: "DockerComposeConfig") -> Optional[ServiceVolumeConfig]:
     """
     Interactive service and volume identification with user prompts.
 
@@ -77,22 +92,28 @@ def identify_service_volumes(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         data: Parsed Docker Compose data (from parse_docker_compose)
 
     Returns:
-        Dictionary with structured volume information, or None if cancelled
+        ServiceVolumeConfig with structured volume information, or None if cancelled
     """
-    # Get available services
-    services = get_services(data)
-    if not services:
+    # Get available services directly from data class
+    if not data.services:
         print("No services found in the compose file.")
         return None
 
     # Let user choose service
-    service = prompt_user_choice(services, "Select a service to inspect:")
-    if not service:
+    service_names = list(data.services.keys())
+    service_name = prompt_user_choice(service_names, "Select a service to inspect:")
+    if not service_name:
         return None
 
-    # Get volumes for chosen service
-    volumes = get_volumes(services, service)
+    # Get volumes for chosen service using the data class method
+    service = data.get_service(service_name)
+    if not service:
+        print(f"Service '{service_name}' not found.")
+        return None
+        
+    volumes = service.volumes
     if not volumes:
+        print(f"No volumes found for service '{service_name}'.")
         return None
 
     # Choose the main volume
@@ -109,4 +130,4 @@ def identify_service_volumes(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         return None
 
     # Create and return structured volume information
-    return create_volume_info(service, main, backup, volumes)
+    return create_volume_info(service_name, main, backup, volumes)
