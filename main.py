@@ -69,6 +69,7 @@ def main() -> None:
             docker_mgr.update_service_container(service_name)
             docker_mgr.build_service_container(service_name)
             docker_mgr.remove_service_main_volume(compose_config, service_volume_config)
+            docker_mgr.start_service_container(service_name)
     except Exception as e:
         print(f"Error: {e}")
         sys.exit(1)

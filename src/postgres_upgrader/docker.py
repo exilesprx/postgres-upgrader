@@ -127,6 +127,13 @@ class DockerManager:
                 f"Failed to remove volume {service_config.main_volume.name}: {e}"
             )
 
+    def start_service_container(self, name: str):
+        print("Restarting service container...")
+        try:
+            subprocess.run(["docker", "compose", "up", "-d", name], check=True)
+        except subprocess.CalledProcessError as e:
+            raise Exception(f"Failed to restart service {name}: {e}")
+
     def find_container_by_service(self, name: str):
         if self.client is None:
             raise Exception(
