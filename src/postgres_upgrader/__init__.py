@@ -8,9 +8,8 @@ from .compose_inspector import (
     ServiceConfig,
     VolumeMount,
 )
-from .prompt import prompt_user_choice, identify_service_volumes, ServiceVolumeConfig, VolumeInfo
+from .prompt import prompt_user_choice, identify_service_volumes
 from .docker import DockerManager
-from .env import get_database_name, get_database_user
 
 __all__ = [
     # Compose inspector functions
@@ -21,11 +20,6 @@ __all__ = [
     # User interaction functions
     "prompt_user_choice",
     "identify_service_volumes",
-    "ServiceVolumeConfig",
-    "VolumeInfo",
     # Docker operations
     "DockerManager",
-    # Environment functions
-    "get_database_name",
-    "get_database_user",
 ]

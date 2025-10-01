@@ -47,7 +47,35 @@ class ServiceConfig:
     name: str
     environment: Dict[str, str] = field(default_factory=dict)
     volumes: List[VolumeMount] = field(default_factory=list)
-    # Add other service properties as needed
+    # User-selected volumes for PostgreSQL operations
+    selected_main_volume: Optional[VolumeMount] = None
+    selected_backup_volume: Optional[VolumeMount] = None
+
+    def select_volumes(
+        self, main_volume: VolumeMount, backup_volume: VolumeMount
+    ) -> None:
+        """Set the user-selected main and backup volumes."""
+        self.selected_main_volume = main_volume
+        self.selected_backup_volume = backup_volume
+
+    def get_main_volume_resolved_name(self) -> Optional[str]:
+        """Get the resolved name of the selected main volume."""
+        return (
+            self.selected_main_volume.resolved_name
+            if self.selected_main_volume
+            else None
+        )
+
+    def get_backup_volume_path(self) -> Optional[str]:
+        """Get the path of the selected backup volume."""
+        return self.selected_backup_volume.path if self.selected_backup_volume else None
+
+    def is_configured_for_postgres_upgrade(self) -> bool:
+        """Check if volumes are selected for PostgreSQL upgrade."""
+        return (
+            self.selected_main_volume is not None
+            and self.selected_backup_volume is not None
+        )
 
 
 @dataclass

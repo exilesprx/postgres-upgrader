@@ -154,26 +154,20 @@ from postgres_upgrader import (
     parse_docker_compose,
     identify_service_volumes,
     DockerManager,
-    get_database_user,
-    get_database_name
 )
 
 compose_data = parse_docker_compose()
-volume_config = identify_service_volumes(compose_data)
+selected_service = identify_service_volumes(compose_data)
 
-if volume_config:
-    service_name = volume_config.name
+if selected_service:
+    service_name = selected_service.name
 
-    # Try to get credentials from .env file, fallback to Docker Compose environment
-    try:
-        user = get_database_user()
-        database = get_database_name()
-    except Exception:
-        user = compose_data.get_postgres_user(service_name)
-        database = compose_data.get_postgres_db(service_name)
+    # Get credentials from Docker Compose environment
+    user = compose_data.get_postgres_user(service_name)
+    database = compose_data.get_postgres_db(service_name)
 
-    # Create backup using DockerManager with configuration
-    with DockerManager(compose_data, volume_config) as docker_mgr:
+    # Create backup using DockerManager with selected service
+    with DockerManager(selected_service) as docker_mgr:
         backup_path = docker_mgr.create_postgres_backup(user, database)
         print(f"Backup created: {backup_path}")
 ```
@@ -184,26 +178,20 @@ from postgres_upgrader import (
     parse_docker_compose,
     identify_service_volumes,
     DockerManager,
-    get_database_user,
-    get_database_name
 )
 
 compose_data = parse_docker_compose()
-volume_config = identify_service_volumes(compose_data)
+selected_service = identify_service_volumes(compose_data)
 
-if volume_config:
-    service_name = volume_config.name
+if selected_service:
+    service_name = selected_service.name
 
-    # Get credentials
-    try:
-        user = get_database_user()
-        database = get_database_name()
-    except Exception:
-        user = compose_data.get_postgres_user(service_name)
-        database = compose_data.get_postgres_db(service_name)
+    # Get credentials from Docker Compose environment
+    user = compose_data.get_postgres_user(service_name)
+    database = compose_data.get_postgres_db(service_name)
 
     # Perform complete upgrade workflow
-    with DockerManager(compose_data, volume_config) as docker_mgr:
+    with DockerManager(selected_service) as docker_mgr:
         backup_path = docker_mgr.perform_postgres_upgrade(user, database)
         print(f"Upgrade completed! Backup: {backup_path}")
 ```

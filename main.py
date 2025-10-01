@@ -40,15 +40,16 @@ def main() -> None:
             "Make sure you're in a directory with a docker-compose.yml file and Docker Compose is installed."
         )
         sys.exit(1)
-    service_volume_config = identify_service_volumes(compose_config)
 
-    if not service_volume_config:
+    selected_service = identify_service_volumes(compose_config)
+
+    if not selected_service:
         print("No volumes found or selection cancelled")
         sys.exit(1)
 
-    print(f"Backup location: {service_volume_config.backup_volume.dir}")
+    print(f"Backup location: {selected_service.get_backup_volume_path()}")
 
-    service_name = service_volume_config.name
+    service_name = selected_service.name
     if not service_name:
         print("Error: Service name not found in selection")
         sys.exit(1)
@@ -63,7 +64,7 @@ def main() -> None:
         sys.exit(1)
 
     try:
-        with DockerManager(compose_config, service_volume_config) as docker_mgr:
+        with DockerManager(selected_service) as docker_mgr:
             docker_mgr.perform_postgres_upgrade(user, database)
     except Exception as e:
         print(f"Error: {e}")

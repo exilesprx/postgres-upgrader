@@ -4,7 +4,7 @@ Tests for Docker backup functionality.
 
 import pytest
 from unittest.mock import MagicMock, patch
-from postgres_upgrader import DockerManager, ServiceVolumeConfig, VolumeInfo
+from postgres_upgrader import DockerManager, ServiceConfig, VolumeMount
 
 
 class TestDockerManager:
@@ -14,12 +14,27 @@ class TestDockerManager:
         """Test that DockerManager.create_postgres_backup accepts correct parameters."""
         # This test verifies the function signature without Docker dependencies
 
-        # Create service config using the new data classes
-        service_config = ServiceVolumeConfig(
+        # Create service config with selections using the new data classes
+        service_config = ServiceConfig(
             name="postgres",
-            main_volume=VolumeInfo(name="database", dir="/var/lib/postgresql/data"),
-            backup_volume=VolumeInfo(name="backups", dir="/var/lib/postgresql/backups"),
+            volumes=[
+                VolumeMount(
+                    name="database",
+                    path="/var/lib/postgresql/data",
+                    raw="database:/var/lib/postgresql/data",
+                    resolved_name="test_database",
+                ),
+                VolumeMount(
+                    name="backups",
+                    path="/var/lib/postgresql/backups",
+                    raw="backups:/var/lib/postgresql/backups",
+                    resolved_name="test_backups",
+                ),
+            ],
         )
+        # Set selections to simulate user choice
+        service_config.selected_main_volume = service_config.volumes[0]
+        service_config.selected_backup_volume = service_config.volumes[1]
 
         # Mock Docker to test the function structure
         with patch("postgres_upgrader.docker.docker.from_env") as mock_docker:
@@ -28,6 +43,6 @@ class TestDockerManager:
             mock_client.containers.list.return_value = []  # No containers found
 
             # Should raise exception when no containers found - using new API
-            with DockerManager(service_config=service_config) as docker_mgr:
+            with DockerManager(service_config) as docker_mgr:
                 with pytest.raises(Exception, match="No containers found"):
                     docker_mgr.create_postgres_backup("testuser", "testdb")

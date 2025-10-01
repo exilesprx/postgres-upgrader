@@ -3,35 +3,27 @@ import subprocess
 from datetime import datetime
 from typing import Optional, TYPE_CHECKING
 
-from postgres_upgrader.compose_inspector import DockerComposeConfig
-
 if TYPE_CHECKING:
-    from .prompt import ServiceVolumeConfig
+    from .compose_inspector import ServiceConfig
 
 
 class DockerManager:
     """
     Context manager for Docker client operations with PostgreSQL upgrade capabilities.
 
-    Provides efficient client reuse and encapsulates Docker Compose configuration
+    Provides efficient client reuse and encapsulates service configuration
     for streamlined PostgreSQL upgrade workflows.
 
     Args:
-        compose_config: DockerComposeConfig with resolved Docker Compose data
-        service_config: ServiceVolumeConfig with service and volume information
+        service_config: ServiceConfig with selected volumes and resolved data
 
     Example:
-        with DockerManager(compose_config, service_config) as docker_mgr:
+        with DockerManager(selected_service) as docker_mgr:
             docker_mgr.perform_postgres_upgrade(user, database)
     """
 
-    def __init__(
-        self,
-        compose_config: Optional["DockerComposeConfig"] = None,
-        service_config: Optional["ServiceVolumeConfig"] = None,
-    ):
+    def __init__(self, service_config: Optional["ServiceConfig"] = None):
         self.client: Optional[docker.DockerClient] = None
-        self.compose_config = compose_config
         self.service_config = service_config
 
     def __enter__(self) -> "DockerManager":
@@ -60,17 +52,19 @@ class DockerManager:
             Exception: If container not found, backup fails, or multiple containers exist
 
         Note:
-            Requires ServiceVolumeConfig to be set in the DockerManager constructor.
+            Requires ServiceConfig to be set in the DockerManager constructor.
         """
         if not self.client:
             raise Exception(
                 "DockerManager not properly initialized. Use as context manager."
             )
         if not self.service_config:
-            raise Exception("ServiceVolumeConfig required for backup creation")
+            raise Exception("ServiceConfig required for backup creation")
+        if not self.service_config.is_configured_for_postgres_upgrade():
+            raise Exception("Service must have selected volumes for PostgreSQL upgrade")
 
         service_name = self.service_config.name
-        backup_dir = self.service_config.backup_volume.dir
+        backup_dir = self.service_config.get_backup_volume_path()
 
         if not service_name:
             raise Exception("Service name not found in configuration")
@@ -121,9 +115,9 @@ class DockerManager:
             Ensure you have proper backups before running this workflow.
         """
         if not self.service_config:
-            raise Exception("ServiceVolumeConfig required for upgrade workflow")
-        if not self.compose_config:
-            raise Exception("DockerComposeConfig required for upgrade workflow")
+            raise Exception("ServiceConfig required for upgrade workflow")
+        if not self.service_config.is_configured_for_postgres_upgrade():
+            raise Exception("Service must have selected volumes for PostgreSQL upgrade")
 
         backup_path = self.create_postgres_backup(user, database)
         self.stop_service_container()
@@ -137,7 +131,7 @@ class DockerManager:
     def stop_service_container(self):
         """Stop and remove the configured service container."""
         if not self.service_config:
-            raise Exception("ServiceVolumeConfig required for stopping service")
+            raise Exception("ServiceConfig required for stopping service")
 
         service_name = self.service_config.name
         try:
@@ -149,7 +143,7 @@ class DockerManager:
     def update_service_container(self):
         """Pull latest image for the configured service."""
         if not self.service_config:
-            raise Exception("ServiceVolumeConfig required for updating service")
+            raise Exception("ServiceConfig required for updating service")
 
         service_name = self.service_config.name
         try:
@@ -160,7 +154,7 @@ class DockerManager:
     def build_service_container(self):
         """Build the configured service container."""
         if not self.service_config:
-            raise Exception("ServiceVolumeConfig required for building service")
+            raise Exception("ServiceConfig required for building service")
 
         service_name = self.service_config.name
         try:
@@ -171,43 +165,25 @@ class DockerManager:
     def remove_service_main_volume(self):
         """Remove the main volume for the configured service."""
         if not self.service_config:
-            raise Exception("ServiceVolumeConfig required for volume removal")
-        if not self.compose_config:
-            raise Exception("DockerComposeConfig required for volume removal")
+            raise Exception("ServiceConfig required for volume removal")
+        if not self.service_config.is_configured_for_postgres_upgrade():
+            raise Exception("Service must have selected volumes for PostgreSQL upgrade")
 
-        if self.service_config.main_volume.name is None:
-            raise Exception("Main volume not found in service configuration")
-
-        # Find the main_volume in the compose config to ensure it exists
-        target_volume = None
-        for vol in self.compose_config.get_volumes(self.service_config.name):
-            if vol.name == self.service_config.main_volume.name:
-                target_volume = vol
-                break
-
-        if target_volume is None:
-            raise Exception(
-                f"Main volume '{self.service_config.main_volume.name}' not found in compose configuration"
-            )
-
-        if target_volume.resolved_name is None:
-            raise Exception(
-                "Main volume does not have a resolved name in compose configuration"
-            )
+        main_volume = self.service_config.selected_main_volume
+        if not main_volume or not main_volume.resolved_name:
+            raise Exception("Main volume does not have a resolved name")
 
         try:
             subprocess.run(
-                ["docker", "volume", "rm", target_volume.resolved_name], check=True
+                ["docker", "volume", "rm", main_volume.resolved_name], check=True
             )
         except subprocess.CalledProcessError as e:
-            raise Exception(
-                f"Failed to remove volume {self.service_config.main_volume.name}: {e}"
-            )
+            raise Exception(f"Failed to remove volume {main_volume.name}: {e}")
 
     def start_service_container(self):
         """Start the configured service container."""
         if not self.service_config:
-            raise Exception("ServiceVolumeConfig required for starting service")
+            raise Exception("ServiceConfig required for starting service")
 
         service_name = self.service_config.name
         print("Restarting service container...")
@@ -223,7 +199,7 @@ class DockerManager:
                 "DockerManager not properly initialized. Use as context manager."
             )
         if not self.service_config:
-            raise Exception("ServiceVolumeConfig required for finding container")
+            raise Exception("ServiceConfig required for finding container")
 
         service_name = self.service_config.name
         containers = self.client.containers.list(

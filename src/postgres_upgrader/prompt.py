@@ -1,26 +1,8 @@
 from typing import List, Optional, TYPE_CHECKING
-from dataclasses import dataclass
 import inquirer
 
 if TYPE_CHECKING:
-    from .compose_inspector import DockerComposeConfig
-
-
-@dataclass
-class VolumeInfo:
-    """Information about a Docker volume."""
-
-    name: str | None
-    dir: str | None
-
-
-@dataclass
-class ServiceVolumeConfig:
-    """Configuration for a Docker service's volumes."""
-
-    name: str
-    main_volume: VolumeInfo
-    backup_volume: VolumeInfo
+    from .compose_inspector import DockerComposeConfig, ServiceConfig
 
 
 def prompt_user_choice(
@@ -59,7 +41,7 @@ def prompt_user_choice(
 
 def identify_service_volumes(
     data: "DockerComposeConfig",
-) -> Optional[ServiceVolumeConfig]:
+) -> Optional["ServiceConfig"]:
     """
     Interactive service and volume identification with user prompts.
 
@@ -67,7 +49,7 @@ def identify_service_volumes(
         data: Parsed Docker Compose data (from parse_docker_compose)
 
     Returns:
-        ServiceVolumeConfig with structured volume information, or None if cancelled
+        ServiceConfig with selected volumes, or None if cancelled
     """
     # Get available services directly from data class
     if not data.services:
@@ -113,9 +95,6 @@ def identify_service_volumes(
     # Find the corresponding VolumeMount object
     backup_volume = next(vol for vol in volumes if vol.raw == backup_choice)
 
-    # Create and return structured volume information using the parsed data
-    return ServiceVolumeConfig(
-        name=service_name,
-        main_volume=VolumeInfo(name=main_volume.name, dir=main_volume.path),
-        backup_volume=VolumeInfo(name=backup_volume.name, dir=backup_volume.path),
-    )
+    # Set the selected volumes on the service and return it
+    service.select_volumes(main_volume, backup_volume)
+    return service
