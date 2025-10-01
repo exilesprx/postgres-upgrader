@@ -7,7 +7,6 @@ requires-python = ">=3.13"
 dependencies = [
     "docker>=7.1.0",
     "inquirer>=3.4.1",
-    "pytest>=8.4.2",
     "pyyaml>=6.0.3",
 ]
 
@@ -33,5 +32,6 @@ markers = [
 
 [dependency-groups]
 dev = [
+    "pytest>=8.4.2",
     "ruff>=0.13.2",
 ]
