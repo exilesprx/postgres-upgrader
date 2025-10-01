@@ -1,7 +1,6 @@
 from typing import List, Optional, TYPE_CHECKING
 from dataclasses import dataclass
 import inquirer
-from .compose_inspector import extract_location, extract_name
 
 if TYPE_CHECKING:
     from .compose_inspector import DockerComposeConfig
@@ -58,34 +57,6 @@ def prompt_user_choice(
         return None
 
 
-def create_volume_info(
-    service_name: str, main_volume: str, backup_volume: str, all_volumes: List[str]
-) -> ServiceVolumeConfig:
-    """
-    Create structured volume information for a service.
-
-    Args:
-        service_name: Name of the Docker service
-        main_volume: Main volume string (e.g., "database:/var/lib/postgresql/data")
-        backup_volume: Backup volume string (e.g., "backups:/var/lib/postgresql/backups")
-        all_volumes: List of all volumes for the service
-
-    Returns:
-        ServiceVolumeConfig with structured volume information
-    """
-    return ServiceVolumeConfig(
-        name=service_name,
-        main_volume=VolumeInfo(
-            name=extract_name(main_volume, all_volumes),
-            dir=extract_location(main_volume, all_volumes),
-        ),
-        backup_volume=VolumeInfo(
-            name=extract_name(backup_volume, all_volumes),
-            dir=extract_location(backup_volume, all_volumes),
-        ),
-    )
-
-
 def identify_service_volumes(
     data: "DockerComposeConfig",
 ) -> Optional[ServiceVolumeConfig]:
@@ -120,18 +91,31 @@ def identify_service_volumes(
         print(f"No volumes found for service '{service_name}'.")
         return None
 
+    # Convert VolumeMount objects to strings for user selection
+    volume_choices = [vol.raw for vol in volumes]
+    
     # Choose the main volume
-    main = prompt_user_choice(volumes, "Select the main volume:")
-    if not main:
+    main_choice = prompt_user_choice(volume_choices, "Select the main volume:")
+    if not main_choice:
         return None
+    
+    # Find the corresponding VolumeMount object
+    main_volume = next(vol for vol in volumes if vol.raw == main_choice)
 
     # Create a list of remaining volumes for backup selection
-    remaining_volumes = [v for v in volumes if v != main]
+    remaining_choices = [vol.raw for vol in volumes if vol.raw != main_choice]
 
     # Let user choose backup volume
-    backup = prompt_user_choice(remaining_volumes, "Select the backup volume:")
-    if not backup:
+    backup_choice = prompt_user_choice(remaining_choices, "Select the backup volume:")
+    if not backup_choice:
         return None
+    
+    # Find the corresponding VolumeMount object
+    backup_volume = next(vol for vol in volumes if vol.raw == backup_choice)
 
-    # Create and return structured volume information
-    return create_volume_info(service_name, main, backup, volumes)
+    # Create and return structured volume information using the parsed data
+    return ServiceVolumeConfig(
+        name=service_name,
+        main_volume=VolumeInfo(name=main_volume.name, dir=main_volume.path),
+        backup_volume=VolumeInfo(name=backup_volume.name, dir=backup_volume.path)
+    )

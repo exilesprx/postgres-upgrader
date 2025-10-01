@@ -94,24 +94,27 @@ The tool will:
 
 ```python
 # Basic usage - parse and analyze Docker Compose files
-from postgres_upgrader import parse_docker_compose, get_services, get_volumes, extract_location
+from postgres_upgrader import parse_docker_compose
 
 # Parse Docker Compose file once
 compose_data = parse_docker_compose("docker-compose.yml")
 
 # Get services from parsed data
-services = get_services(compose_data)
+services = compose_data.services
 print("Available services:", list(services.keys()))
 
 # Get volumes for a specific service
-volumes = get_volumes(services, "postgres")
-print("Postgres volumes:", volumes)
+volumes = compose_data.get_volumes("postgres")
+print("Postgres volumes:", [v.raw for v in volumes])
 
-# Extract specific volume paths
-backup_path = extract_location("backups", volumes)
-data_path = extract_location("database", volumes)
-print(f"Backup volume path: {backup_path}")
-print(f"Data volume path: {data_path}")
+# Access specific volume information directly from VolumeMount objects
+backup_volume = next((v for v in volumes if v.name == "backups"), None)
+data_volume = next((v for v in volumes if v.name == "database"), None)
+
+if backup_volume:
+    print(f"Backup volume path: {backup_volume.path}")
+if data_volume:
+    print(f"Data volume path: {data_volume.path}")
 ```
 
 ```python

@@ -8,12 +8,9 @@ import os
 import pytest
 from postgres_upgrader import (
     parse_docker_compose,
-    extract_location,
-    create_volume_info,
-    ServiceVolumeConfig,
-    VolumeInfo,
     DockerComposeConfig,
 )
+from postgres_upgrader.compose_inspector import VolumeMount
 
 
 @pytest.fixture
@@ -93,8 +90,10 @@ class TestGetVolumes:
 
         assert isinstance(volumes, list)
         assert len(volumes) == 2
-        assert "database:/var/lib/postgresql/data" in volumes
-        assert "backups:/var/lib/postresql/backups" in volumes
+        
+        volume_raws = [v.raw for v in volumes]
+        assert "database:/var/lib/postgresql/data" in volume_raws
+        assert "backups:/var/lib/postresql/backups" in volume_raws
 
     def test_get_volumes_nginx(self, compose_file):
         """Test getting volumes for nginx service."""
@@ -103,8 +102,10 @@ class TestGetVolumes:
 
         assert isinstance(volumes, list)
         assert len(volumes) == 2
-        assert "./nginx.conf:/etc/nginx/nginx.conf" in volumes
-        assert "logs:/var/log/nginx" in volumes
+        
+        volume_raws = [v.raw for v in volumes]
+        assert "./nginx.conf:/etc/nginx/nginx.conf" in volume_raws
+        assert "logs:/var/log/nginx" in volume_raws
 
     def test_get_volumes_nonexistent_service(self, compose_file):
         """Test getting volumes for non-existent service."""
@@ -114,69 +115,67 @@ class TestGetVolumes:
         assert volumes == []
 
 
-class TestExtractLocation:
-    """Test location extraction from volume strings."""
+class TestVolumeAccess:
+    """Test accessing volume information directly from VolumeMount objects."""
 
-    def test_extract_location_found(self):
-        """Test extracting location when pattern is found."""
+    def test_volume_access_by_name(self):
+        """Test finding volumes by name and accessing their properties."""
         volumes = [
-            "database:/var/lib/postgresql/data",
-            "backups:/var/lib/postresql/backups",
+            VolumeMount.from_string("database:/var/lib/postgresql/data"),
+            VolumeMount.from_string("backups:/var/lib/postgresql/backups"),
         ]
+        
+        # Find backup volume by name
+        backup_volume = next((v for v in volumes if v.name == "backups"), None)
+        assert backup_volume is not None
+        assert backup_volume.path == "/var/lib/postgresql/backups"
+        assert backup_volume.raw == "backups:/var/lib/postgresql/backups"
 
-        result = extract_location("backups", volumes)
-        assert result == "/var/lib/postresql/backups"
+    def test_volume_access_name_not_found(self):
+        """Test when volume name is not found."""
+        volumes = [
+            VolumeMount.from_string("database:/var/lib/postgresql/data"), 
+            VolumeMount.from_string("logs:/var/log/nginx")
+        ]
+        
+        # Try to find non-existent volume
+        missing_volume = next((v for v in volumes if v.name == "backups"), None)
+        assert missing_volume is None
 
-    def test_extract_location_not_found(self):
-        """Test extracting location when pattern is not found."""
-        volumes = ["database:/var/lib/postgresql/data", "logs:/var/log/nginx"]
-
-        result = extract_location("backups", volumes)
-        assert result is None
-
-    def test_extract_location_empty_volumes(self):
-        """Test extracting location from empty volume list."""
-        result = extract_location("backups", [])
-        assert result is None
+    def test_volume_access_empty_list(self):
+        """Test accessing volumes from empty list."""
+        volumes = []
+        missing_volume = next((v for v in volumes if v.name == "backups"), None)
+        assert missing_volume is None
 
 
-class TestCreateVolumeInfo:
-    """Test volume information structure creation."""
+class TestVolumeMount:
+    """Test volume mount parsing functionality."""
 
-    def test_create_volume_info_complete(self):
-        """Test creating volume info with valid main and backup volumes."""
-        service_name = "postgres"
-        main_volume = "database:/var/lib/postgresql/data"
-        backup_volume = "backups:/var/lib/postgresql/backups"
-        all_volumes = [main_volume, backup_volume]
-
-        result = create_volume_info(
-            service_name, main_volume, backup_volume, all_volumes
+    def test_volume_mount_parsing_complete(self):
+        """Test parsing volume mount strings with valid format."""
+        volume_str = "database:/var/lib/postgresql/data"
+        
+        result = VolumeMount.from_string(volume_str)
+        
+        expected = VolumeMount(
+            name="database",
+            path="/var/lib/postgresql/data",
+            raw="database:/var/lib/postgresql/data"
         )
-
-        expected = ServiceVolumeConfig(
-            name="postgres",
-            main_volume=VolumeInfo(name="database", dir="/var/lib/postgresql/data"),
-            backup_volume=VolumeInfo(name="backups", dir="/var/lib/postgresql/backups")
-        )
-
+        
         assert result == expected
 
-    def test_create_volume_info_missing_volumes(self):
-        """Test creating volume info when volumes are not found in the list."""
-        service_name = "redis"
-        main_volume = "missing-main:/data"
-        backup_volume = "missing-backup:/backup"
-        all_volumes = ["different-volume:/other/path"]
-
-        result = create_volume_info(
-            service_name, main_volume, backup_volume, all_volumes
+    def test_volume_mount_parsing_invalid_format(self):
+        """Test parsing volume mount strings with invalid format."""
+        volume_str = "invalid-format-no-colon"
+        
+        result = VolumeMount.from_string(volume_str)
+        
+        expected = VolumeMount(
+            name=None,
+            path=None,
+            raw="invalid-format-no-colon"
         )
-
-        expected = ServiceVolumeConfig(
-            name="redis",
-            main_volume=VolumeInfo(name=None, dir=None),
-            backup_volume=VolumeInfo(name=None, dir=None)
-        )
-
+        
         assert result == expected

@@ -4,12 +4,29 @@ from dataclasses import dataclass, field
 
 
 @dataclass
+class VolumeMount:
+    """Information about a Docker volume mount."""
+    name: Optional[str]  # e.g., "database"
+    path: Optional[str]  # e.g., "/var/lib/postgresql/data"
+    raw: str   # e.g., "database:/var/lib/postgresql/data"
+    
+    @classmethod
+    def from_string(cls, volume_string: str) -> "VolumeMount":
+        """Parse a Docker Compose volume string into a VolumeMount object."""
+        if ":" in volume_string:
+            parts = volume_string.split(":", 1)  # Split on first colon only
+            return cls(name=parts[0], path=parts[1], raw=volume_string)
+        else:
+            # Invalid format or named volume without host path
+            return cls(name=None, path=None, raw=volume_string)
+
+
+@dataclass
 class ServiceConfig:
     """Configuration for a Docker Compose service."""
-
     name: str
     environment: Dict[str, str] = field(default_factory=dict)
-    volumes: List[str] = field(default_factory=list)
+    volumes: List[VolumeMount] = field(default_factory=list)
     # Add other service properties as needed
 
 
@@ -23,8 +40,8 @@ class DockerComposeConfig:
         """Get a service by name."""
         return self.services.get(name)
 
-    def get_volumes(self, service_name: str) -> List[str]:
-        """Get list of volumes for a specific service."""
+    def get_volumes(self, service_name: str) -> List[VolumeMount]:
+        """Get list of volume mounts for a specific service."""
         service = self.get_service(service_name)
         return service.volumes if service else []
 
@@ -48,26 +65,15 @@ def parse_docker_compose(file_path: str) -> DockerComposeConfig:
     raw_services = raw_data.get("services", {})
 
     for service_name, service_data in raw_services.items():
+        # Parse volumes into structured data at parse time
+        volume_mounts = []
+        for volume_string in service_data.get("volumes", []):
+            volume_mounts.append(VolumeMount.from_string(volume_string))
+        
         services[service_name] = ServiceConfig(
             name=service_name,
             environment=service_data.get("environment", {}),
-            volumes=service_data.get("volumes", []),
+            volumes=volume_mounts,
         )
 
     return DockerComposeConfig(services=services)
-
-
-def extract_location(want: str, volumes: List[str]) -> Optional[str]:
-    """Extract the host path for a given volume name."""
-    for volume in volumes:
-        if want in volume:
-            return volume.split(":")[1]
-    return None
-
-
-def extract_name(want: str, volumes: List[str]) -> Optional[str]:
-    """Extract the volume name for a given volume string."""
-    for volume in volumes:
-        if want in volume:
-            return volume.split(":")[0]
-    return None
