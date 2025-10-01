@@ -15,7 +15,9 @@ from postgres_upgrader.compose_inspector import get_services
 from postgres_upgrader.env import get_database_user, get_database_name
 
 
-def get_credentials(compose_data: Dict[str, Any], service_name: str) -> Tuple[Optional[str], Optional[str]]:
+def get_credentials(
+    compose_data: Dict[str, Any], service_name: str
+) -> Tuple[Optional[str], Optional[str]]:
     """
     Get PostgreSQL credentials with .env fallback to Docker Compose.
 

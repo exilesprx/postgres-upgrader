@@ -1,10 +1,11 @@
 import docker
 from datetime import datetime
 from typing import Dict, Any
-from .env import get_database_user, get_database_name
 
 
-def create_postgres_backup(user: str, database: str, service_config: Dict[str, Any]) -> str:
+def create_postgres_backup(
+    user: str, database: str, service_config: Dict[str, Any]
+) -> str:
     """
     Export PostgreSQL data from a Docker container to a backup file.
 

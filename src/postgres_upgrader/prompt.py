@@ -3,7 +3,9 @@ import inquirer
 from .compose_inspector import extract_location, extract_name, get_services, get_volumes
 
 
-def prompt_user_choice(choices: List[str], prompt_message: str = "Please select an option:") -> Optional[str]:
+def prompt_user_choice(
+    choices: List[str], prompt_message: str = "Please select an option:"
+) -> Optional[str]:
     """
     Prompt user to select from a list of choices using inquirer with text fallback.
 
@@ -35,7 +37,9 @@ def prompt_user_choice(choices: List[str], prompt_message: str = "Please select 
         return None
 
 
-def create_volume_info(service_name: str, main_volume: str, backup_volume: str, all_volumes: List[str]) -> Dict[str, Any]:
+def create_volume_info(
+    service_name: str, main_volume: str, backup_volume: str, all_volumes: List[str]
+) -> Dict[str, Any]:
     """
     Create structured volume information for a service.
 

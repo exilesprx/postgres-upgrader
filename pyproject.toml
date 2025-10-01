@@ -31,3 +31,8 @@ markers = [
     "slow: marks tests as slow",
     "integration: marks tests as integration tests"
 ]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.13.2",
+]
