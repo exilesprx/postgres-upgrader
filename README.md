@@ -47,6 +47,7 @@ poetry install
 The tool needs PostgreSQL credentials which can be provided in two ways:
 
 1. **Via `.env` file** (recommended):
+
    ```bash
    POSTGRES_USER=your_postgres_user
    POSTGRES_DB=your_database_name
@@ -65,29 +66,27 @@ uv run ./main.py docker-compose.yml
 ```
 
 The tool will:
+
 1. Parse your Docker Compose file
 2. Interactively prompt you to select a service
-3. Let you choose main and backup volumes  
+3. Let you choose main and backup volumes
 4. Attempt to create a PostgreSQL backup using the selected configuration
 
 ### Example Output
 
-```json
-{
-  "service": {
-    "name": "postgres",
-    "volumes": {
-      "backup": {
-        "dir": "/var/lib/postgresql/backups",
-        "name": "backups"
-      },
-      "main": {
-        "dir": "/var/lib/postgresql/data",
-        "name": "database"
-      }
-    }
-  }
-}
+```
+[?] Select a service to inspect::
+ > postgres
+   nginx
+
+[?] Select the main volume::
+ > database:/var/lib/postgresql/data
+   backups:/var/lib/postgresql/backups
+
+[?] Select the backup volume::
+ > backups:/var/lib/postgresql/backups
+
+Backup location: /var/lib/postgresql/backups
 ```
 
 ### As a Library
@@ -126,8 +125,8 @@ compose_data = parse_docker_compose("docker-compose.yml")
 volume_config = identify_service_volumes(compose_data)
 
 if volume_config:
-    service_name = volume_config["service"]["name"]
-    backup_dir = volume_config["service"]["volumes"]["backup"]["dir"]
+    service_name = volume_config.name
+    backup_dir = volume_config.backup_volume.dir
     print(f"Selected service: {service_name}")
     print(f"Backup directory: {backup_dir}")
 ```
@@ -135,36 +134,35 @@ if volume_config:
 ```python
 # Full backup workflow with credential fallback
 from postgres_upgrader import (
-    parse_docker_compose, 
-    identify_service_volumes, 
+    parse_docker_compose,
+    identify_service_volumes,
     DockerManager,
     get_database_user,
     get_database_name
 )
-from postgres_upgrader.compose_inspector import get_services
 
 # Parse and select volumes
 compose_data = parse_docker_compose("docker-compose.yml")
 volume_config = identify_service_volumes(compose_data)
 
 if volume_config:
-    service_name = volume_config["service"]["name"]
-    
+    service_name = volume_config.name
+
     # Try to get credentials from .env file, fallback to Docker Compose
     try:
         user = get_database_user()
         database = get_database_name()
     except Exception:
-        # Fallback to Docker Compose environment variables
-        services = get_services(compose_data)
-        user = services.get(service_name, {}).get("environment", {}).get("POSTGRES_USER")
-        database = services.get(service_name, {}).get("environment", {}).get("POSTGRES_DB")
-    
+        # Fallback to Docker Compose environment variables using data class methods
+        user = compose_data.get_postgres_user(service_name)
+        database = compose_data.get_postgres_db(service_name)
+
     # Create backup using DockerManager
     with DockerManager() as docker_mgr:
         backup_path = docker_mgr.create_postgres_backup(user, database, volume_config)
         print(f"Backup created: {backup_path}")
 ```
+
 ## Development
 
 ### Running Tests
@@ -209,7 +207,7 @@ postgres-upgrader/
 # Running tests (included in project dependencies)
 uv run pytest
 
-# Run with verbose output  
+# Run with verbose output
 uv run pytest -v
 
 # Run specific test file
@@ -226,7 +224,7 @@ uv sync --group dev
 
 # Code linting and formatting (ruff is included as dev dependency)
 uv run ruff check          # Linting
-uv run ruff format         # Code formatting  
+uv run ruff format         # Code formatting
 
 # Optional: Install additional tools
 uv add --dev mypy coverage
