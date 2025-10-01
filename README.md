@@ -8,8 +8,8 @@ A specialized tool for managing PostgreSQL upgrades in Docker Compose environmen
 - 📦 **Volume Identification**: Identify main and backup volumes for PostgreSQL services
 - 🎯 **Upgrade-Focused**: Specifically designed for PostgreSQL upgrade workflows
 - 🖥️ **User-Friendly CLI**: Interactive prompts with arrow-key navigation
-- 📝 **Graceful Fallbacks**: Text-based fallback when advanced UI isn't available
-- ✅ **Well-Tested**: Comprehensive test suite with 20+ tests
+- 📝 **Intuitive Interface**: Interactive prompts with arrow-key navigation
+- ✅ **Well-Tested**: Comprehensive test suite with 15+ tests
 
 ## Installation
 
@@ -19,6 +19,9 @@ A specialized tool for managing PostgreSQL upgrades in Docker Compose environmen
 git clone https://github.com/exilesprx/postgres-upgrader
 cd postgres-upgrader
 uv sync
+
+# For development (includes ruff for code formatting/linting)
+uv sync --group dev
 ```
 
 ### With pip
@@ -186,23 +189,46 @@ postgres-upgrader/
 │   ├── docker.py                  # Docker operations and PostgreSQL backup
 │   └── env.py                     # Environment configuration management
 ├── tests/                         # Test suite
+│   ├── test_docker.py              # Docker operations tests
 │   ├── test_parse_docker_compose.py  # Core functionality tests
 │   └── test_user_choice.py          # User interaction tests
 ├── main.py                        # CLI entry point
 ├── pyproject.toml                 # Project configuration
-├── .env                           # Environment variables (optional)
+├── uv.lock                        # Dependency lock file (uv)
 └── README.md                      # This file
 ```
 
 ### Code Quality
 
 ```bash
-# Linting and formatting (configured in pyproject.toml)
-uv run ruff check
-uv run ruff format
+# Running tests (included in project dependencies)
+uv run pytest
 
-# Type checking
-uv run mypy src/
+# Run with verbose output  
+uv run pytest -v
+
+# Run specific test file
+uv run pytest tests/test_parse_docker_compose.py
+```
+
+#### Development Tools
+
+The project includes development dependencies for code quality:
+
+```bash
+# Install with dev dependencies (includes ruff)
+uv sync --group dev
+
+# Code linting and formatting (ruff is included as dev dependency)
+uv run ruff check          # Linting
+uv run ruff format         # Code formatting  
+
+# Optional: Install additional tools
+uv add --dev mypy coverage
+
+# With additional tools:
+uv run mypy src/           # Type checking
+uv run pytest --cov=src/postgres_upgrader  # Coverage reporting
 ```
 
 ## Requirements
@@ -210,7 +236,7 @@ uv run mypy src/
 - Python 3.13+
 - Docker Compose files in YAML format with PostgreSQL service
 - PostgreSQL credentials either in `.env` file or Docker Compose environment variables
-- Dependencies: `pyyaml`, `inquirer`, `docker`, `python-dotenv`
+- Dependencies: `pyyaml`, `inquirer`, `docker`, `python-dotenv`, `pytest`
 
 ## Future Enhancements
 
