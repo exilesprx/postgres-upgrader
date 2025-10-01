@@ -82,18 +82,32 @@ The tool will:
 
 ```
 [?] Select a service to inspect::
- > postgres
    nginx
+ > postgres
 
 [?] Select the main volume::
- > database:/var/lib/postgresql/data (resolved as: postgres-updater_database)
-   backups:/var/lib/postgresql/backups (resolved as: postgres-updater_backups)
+ > database:/var/lib/postgresql/data
+   backups:/var/lib/postgresql/backups
 
 [?] Select the backup volume::
- > backups:/var/lib/postgresql/backups (resolved as: postgres-updater_backups)
+ > backups:/var/lib/postgresql/backups
 
 Backup location: /var/lib/postgresql/backups
-Creating backup using resolved volume: postgres-updater_backups
+Creating backup of database 'testing' for user 'tester'...
+Backup created successfully: /var/lib/postgresql/backups/backup-20251001_165130.sql
+[+] Stopping 1/1
+ ✔ Container postgres-updater-postgres-1  Stopped                                                                           0.4s
+? Going to remove postgres-updater-postgres-1 Yes
+[+] Removing 1/0
+ ✔ Container postgres-updater-postgres-1  Removed                                                                           0.0s
+[+] Pulling 1/1
+ ✔ postgres Pulled                                                                                                          0.6s
+[+] Building 0.0s (0/0)                                                                                           docker:default
+postgres-updater_database
+Restarting service container...
+[+] Running 2/2
+ ✔ Volume "postgres-updater_database"     Created                                                                           0.0s
+ ✔ Container postgres-updater-postgres-1  Started                                                                           0.2s
 ```
 
 ## How It Works
