@@ -15,14 +15,14 @@ class DockerManager:
     for streamlined PostgreSQL upgrade workflows.
 
     Args:
-        service_config: ServiceConfig with selected volumes and resolved data
+        service_config: ServiceConfig with selected volumes and resolved data (required)
 
     Example:
         with DockerManager(selected_service) as docker_mgr:
             docker_mgr.perform_postgres_upgrade(user, database)
     """
 
-    def __init__(self, service_config: Optional["ServiceConfig"] = None):
+    def __init__(self, service_config: "ServiceConfig"):
         self.client: Optional[docker.DockerClient] = None
         self.service_config = service_config
 
@@ -58,8 +58,7 @@ class DockerManager:
             raise Exception(
                 "DockerManager not properly initialized. Use as context manager."
             )
-        if not self.service_config:
-            raise Exception("ServiceConfig required for backup creation")
+
         if not self.service_config.is_configured_for_postgres_upgrade():
             raise Exception("Service must have selected volumes for PostgreSQL upgrade")
 
@@ -114,8 +113,6 @@ class DockerManager:
             This is a destructive operation that removes the old data volume.
             Ensure you have proper backups before running this workflow.
         """
-        if not self.service_config:
-            raise Exception("ServiceConfig required for upgrade workflow")
         if not self.service_config.is_configured_for_postgres_upgrade():
             raise Exception("Service must have selected volumes for PostgreSQL upgrade")
 
@@ -130,9 +127,6 @@ class DockerManager:
 
     def stop_service_container(self):
         """Stop and remove the configured service container."""
-        if not self.service_config:
-            raise Exception("ServiceConfig required for stopping service")
-
         service_name = self.service_config.name
         try:
             subprocess.run(["docker", "compose", "stop", service_name], check=True)
@@ -142,9 +136,6 @@ class DockerManager:
 
     def update_service_container(self):
         """Pull latest image for the configured service."""
-        if not self.service_config:
-            raise Exception("ServiceConfig required for updating service")
-
         service_name = self.service_config.name
         try:
             subprocess.run(["docker", "compose", "pull", service_name], check=True)
@@ -153,9 +144,6 @@ class DockerManager:
 
     def build_service_container(self):
         """Build the configured service container."""
-        if not self.service_config:
-            raise Exception("ServiceConfig required for building service")
-
         service_name = self.service_config.name
         try:
             subprocess.run(["docker", "compose", "build", service_name], check=True)
@@ -164,8 +152,6 @@ class DockerManager:
 
     def remove_service_main_volume(self):
         """Remove the main volume for the configured service."""
-        if not self.service_config:
-            raise Exception("ServiceConfig required for volume removal")
         if not self.service_config.is_configured_for_postgres_upgrade():
             raise Exception("Service must have selected volumes for PostgreSQL upgrade")
 
@@ -182,9 +168,6 @@ class DockerManager:
 
     def start_service_container(self):
         """Start the configured service container."""
-        if not self.service_config:
-            raise Exception("ServiceConfig required for starting service")
-
         service_name = self.service_config.name
         print("Restarting service container...")
         try:
@@ -198,8 +181,6 @@ class DockerManager:
             raise Exception(
                 "DockerManager not properly initialized. Use as context manager."
             )
-        if not self.service_config:
-            raise Exception("ServiceConfig required for finding container")
 
         service_name = self.service_config.name
         containers = self.client.containers.list(
