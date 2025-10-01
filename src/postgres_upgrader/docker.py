@@ -8,18 +8,18 @@ class DockerManager:
     Context manager for Docker client operations.
     Provides efficient client reuse across multiple operations.
     """
-    
+
     def __init__(self):
         self.client: Optional[docker.DockerClient] = None
-    
-    def __enter__(self):
+
+    def __enter__(self) -> "DockerManager":
         self.client = docker.from_env()
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.client:
             self.client.close()
-    
+
     def create_postgres_backup(
         self, user: str, database: str, service_config: Dict[str, Any]
     ) -> str:
@@ -40,8 +40,10 @@ class DockerManager:
             Exception: If container not found, backup fails, or multiple containers exist
         """
         if not self.client:
-            raise Exception("DockerManager not properly initialized. Use as context manager.")
-            
+            raise Exception(
+                "DockerManager not properly initialized. Use as context manager."
+            )
+
         # Extract service configuration with cleaner access pattern
         service_info = service_config.get("service", {})
         service_name = service_info.get("name")
