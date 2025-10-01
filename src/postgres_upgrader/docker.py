@@ -1,4 +1,5 @@
 import docker
+import subprocess
 from datetime import datetime
 from typing import Optional, TYPE_CHECKING
 
@@ -53,16 +54,7 @@ class DockerManager:
         if not backup_dir:
             raise Exception("Backup directory not found in configuration")
 
-        containers = self.client.containers.list(
-            filters={"label": f"com.docker.compose.service={service_name}"}
-        )
-
-        if len(containers) == 0:
-            raise Exception(f"No containers found for service {service_name}")
-        if len(containers) > 1:
-            raise Exception(f"Multiple containers found for service {service_name}")
-
-        container = containers[0]
+        container = self.find_container_by_service(service_name)
         date = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_filename = f"backup-{date}.sql"
         backup_path = f"{backup_dir}/{backup_filename}"
@@ -79,3 +71,55 @@ class DockerManager:
 
         print(f"Backup created successfully: {backup_path}")
         return backup_path
+
+    def stop_service_container(self, name: str):
+        try:
+            subprocess.run(["docker", "compose", "stop", name], check=True)
+        except subprocess.CalledProcessError as e:
+            raise Exception(f"Failed to stop service {name}: {e}")
+
+    def update_service_container(self, name: str):
+        try:
+            subprocess.run(["docker", "compose", "pull", name], check=True)
+        except subprocess.CalledProcessError as e:
+            raise Exception(f"Failed to update service {name}: {e}")
+
+    def build_service_container(self, name: str):
+        try:
+            subprocess.run(["docker", "compose", "build", name], check=True)
+        except subprocess.CalledProcessError as e:
+            raise Exception(f"Failed to build service {name}: {e}")
+
+    def replace_service_main_volume(self, service_config: "ServiceVolumeConfig"):
+        if service_config.main_volume.name is None:
+            raise Exception("Main volume not found in service configuration")
+
+        try:
+            subprocess.run(
+                ["docker", "volume", "rm", service_config.main_volume.name], check=True
+            )
+            subprocess.run(
+                ["docker", "volume", "create", service_config.main_volume.name],
+                check=True,
+            )
+        except subprocess.CalledProcessError as e:
+            raise Exception(
+                f"Failed to replace volume {service_config.main_volume.name}: {e}"
+            )
+
+    def find_container_by_service(self, name: str):
+        if self.client is None:
+            raise Exception(
+                "DockerManager not properly initialized. Use as context manager."
+            )
+
+        containers = self.client.containers.list(
+            filters={"label": f"com.docker.compose.service={name}"}
+        )
+
+        if len(containers) == 0:
+            raise Exception(f"No containers found for service {name}")
+        if len(containers) > 1:
+            raise Exception(f"Multiple containers found for service {name}")
+
+        return containers[0]
