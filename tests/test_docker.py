@@ -18,7 +18,7 @@ class TestDockerManager:
         service_config = ServiceVolumeConfig(
             name="postgres",
             main_volume=VolumeInfo(name="database", dir="/var/lib/postgresql/data"),
-            backup_volume=VolumeInfo(name="backups", dir="/var/lib/postgresql/backups")
+            backup_volume=VolumeInfo(name="backups", dir="/var/lib/postgresql/backups"),
         )
 
         # Mock Docker to test the function structure
@@ -27,7 +27,7 @@ class TestDockerManager:
             mock_docker.return_value = mock_client
             mock_client.containers.list.return_value = []  # No containers found
 
-            # Should raise exception when no containers found
-            with DockerManager() as docker_mgr:
+            # Should raise exception when no containers found - using new API
+            with DockerManager(service_config=service_config) as docker_mgr:
                 with pytest.raises(Exception, match="No containers found"):
-                    docker_mgr.create_postgres_backup("testuser", "testdb", service_config)
+                    docker_mgr.create_postgres_backup("testuser", "testdb")

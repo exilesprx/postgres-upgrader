@@ -5,9 +5,10 @@ A specialized tool for managing PostgreSQL upgrades in Docker Compose environmen
 ## Features
 
 - 🔍 **Smart Configuration Parsing**: Uses `docker compose config` for accurate, resolved configuration analysis
-- 🎯 **Upgrade-Focused**: Specifically designed for PostgreSQL upgrade workflows  
+- 🎯 **Upgrade-Focused**: Specifically designed for PostgreSQL upgrade workflows
 - 🖥️ **No File Path Dependencies**: Works from any Docker Compose project directory
 - 📝 **Intuitive Interface**: Interactive prompts with arrow-key navigation
+- 🚀 **Automated Workflow**: Single method performs complete upgrade sequence
 - ✅ **Well-Tested**: Comprehensive test suite with 15+ tests
 
 ## Installation
@@ -75,7 +76,7 @@ The tool will:
 1. Analyze your Docker Compose configuration using `docker compose config`
 2. Interactively prompt you to select a service and volumes
 3. Access resolved environment variables for credentials
-4. Create a PostgreSQL backup using the selected configuration
+4. Perform complete PostgreSQL upgrade workflow (backup, stop, update, rebuild, restart)
 
 ### Example Output
 
@@ -99,7 +100,7 @@ Creating backup using resolved volume: postgres-updater_backups
 
 This tool uses **Docker Compose's own configuration resolution** via the `docker compose config` command to get the exact same configuration that Docker Compose would use, including:
 
-- **Environment Variables**: Automatically resolves all variable substitutions  
+- **Environment Variables**: Automatically resolves all variable substitutions
 - **Volume Prefixes**: Gets actual volume names with project prefixes (e.g., `postgres-updater_database`)
 - **Network Resolution**: Handles complex networking configurations
 - **Real-time Configuration**: Always reflects current project state
@@ -171,10 +172,40 @@ if volume_config:
         user = compose_data.get_postgres_user(service_name)
         database = compose_data.get_postgres_db(service_name)
 
-    # Create backup using DockerManager
-    with DockerManager() as docker_mgr:
-        backup_path = docker_mgr.create_postgres_backup(user, database, volume_config)
+    # Create backup using DockerManager with configuration
+    with DockerManager(compose_data, volume_config) as docker_mgr:
+        backup_path = docker_mgr.create_postgres_backup(user, database)
         print(f"Backup created: {backup_path}")
+```
+
+```python
+# Complete PostgreSQL upgrade workflow
+from postgres_upgrader import (
+    parse_docker_compose,
+    identify_service_volumes,
+    DockerManager,
+    get_database_user,
+    get_database_name
+)
+
+compose_data = parse_docker_compose()
+volume_config = identify_service_volumes(compose_data)
+
+if volume_config:
+    service_name = volume_config.name
+
+    # Get credentials
+    try:
+        user = get_database_user()
+        database = get_database_name()
+    except Exception:
+        user = compose_data.get_postgres_user(service_name)
+        database = compose_data.get_postgres_db(service_name)
+
+    # Perform complete upgrade workflow
+    with DockerManager(compose_data, volume_config) as docker_mgr:
+        backup_path = docker_mgr.perform_postgres_upgrade(user, database)
+        print(f"Upgrade completed! Backup: {backup_path}")
 ```
 
 ## Development

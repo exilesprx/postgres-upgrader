@@ -22,6 +22,7 @@ class TestParseDockerCompose:
         assert "postgres" in compose_data.services
         assert "nginx" in compose_data.services
 
+
 import tempfile
 import os
 import pytest
@@ -69,7 +70,7 @@ class TestGetVolumes:
 
         assert isinstance(volumes, list)
         assert len(volumes) == 2
-        
+
         volume_raws = [v.raw for v in volumes]
         assert "database:/var/lib/postgresql/data" in volume_raws
         assert "backups:/var/lib/postgresql/backups" in volume_raws
@@ -97,11 +98,21 @@ class TestVolumeAccess:
     def test_volume_access_by_name(self):
         """Test finding volumes by name and accessing their properties."""
         volume_configs = [
-            {"type": "volume", "source": "database", "target": "/var/lib/postgresql/data", "volume": {}},
-            {"type": "volume", "source": "backups", "target": "/var/lib/postgresql/backups", "volume": {}},
+            {
+                "type": "volume",
+                "source": "database",
+                "target": "/var/lib/postgresql/data",
+                "volume": {},
+            },
+            {
+                "type": "volume",
+                "source": "backups",
+                "target": "/var/lib/postgresql/backups",
+                "volume": {},
+            },
         ]
         volumes = [VolumeMount.from_string(config) for config in volume_configs]
-        
+
         # Find backup volume by name
         backup_volume = next((v for v in volumes if v.name == "backups"), None)
         assert backup_volume is not None
@@ -111,11 +122,21 @@ class TestVolumeAccess:
     def test_volume_access_name_not_found(self):
         """Test when volume name is not found."""
         volume_configs = [
-            {"type": "volume", "source": "database", "target": "/var/lib/postgresql/data", "volume": {}},
-            {"type": "volume", "source": "logs", "target": "/var/log/nginx", "volume": {}},
+            {
+                "type": "volume",
+                "source": "database",
+                "target": "/var/lib/postgresql/data",
+                "volume": {},
+            },
+            {
+                "type": "volume",
+                "source": "logs",
+                "target": "/var/log/nginx",
+                "volume": {},
+            },
         ]
         volumes = [VolumeMount.from_string(config) for config in volume_configs]
-        
+
         # Try to find non-existent volume
         missing_volume = next((v for v in volumes if v.name == "backups"), None)
         assert missing_volume is None
@@ -136,21 +157,19 @@ class TestVolumeMount:
             "type": "volume",
             "source": "database",
             "target": "/var/lib/postgresql/data",
-            "volume": {}
+            "volume": {},
         }
-        volume_mappings = {
-            "database": {"name": "postgres-updater_database"}
-        }
-        
+        volume_mappings = {"database": {"name": "postgres-updater_database"}}
+
         result = VolumeMount.from_string(volume_config, volume_mappings)
-        
+
         expected = VolumeMount(
             name="database",
             path="/var/lib/postgresql/data",
             raw="database:/var/lib/postgresql/data",
-            resolved_name="postgres-updater_database"
+            resolved_name="postgres-updater_database",
         )
-        
+
         assert result == expected
 
     def test_volume_mount_parsing_other_type(self):
@@ -158,16 +177,16 @@ class TestVolumeMount:
         volume_config = {
             "type": "bind",
             "source": "/host/path",
-            "target": "/container/path"
+            "target": "/container/path",
         }
-        
+
         result = VolumeMount.from_string(volume_config)
-        
+
         expected = VolumeMount(
             name=None,
             path="/container/path",
             raw="unknown:/container/path",
-            resolved_name=None
+            resolved_name=None,
         )
-        
+
         assert result == expected

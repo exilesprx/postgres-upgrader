@@ -63,13 +63,8 @@ def main() -> None:
         sys.exit(1)
 
     try:
-        with DockerManager() as docker_mgr:
-            docker_mgr.create_postgres_backup(user, database, service_volume_config)
-            docker_mgr.stop_service_container(service_name)
-            docker_mgr.update_service_container(service_name)
-            docker_mgr.build_service_container(service_name)
-            docker_mgr.remove_service_main_volume(compose_config, service_volume_config)
-            docker_mgr.start_service_container(service_name)
+        with DockerManager(compose_config, service_volume_config) as docker_mgr:
+            docker_mgr.perform_postgres_upgrade(user, database)
     except Exception as e:
         print(f"Error: {e}")
         sys.exit(1)
