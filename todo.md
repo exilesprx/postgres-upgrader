@@ -13,9 +13,8 @@ docker compose pull postgres
 # Build changes
 docker compose build postgres
 
-# Drop & recreate data volume
+# Drop data volume
 docker volume rm project_database
-docker volume create project_database
 
 # Upgrade image version in docker-compose.yml
 # Start new container

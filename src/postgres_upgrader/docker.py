@@ -3,6 +3,8 @@ import subprocess
 from datetime import datetime
 from typing import Optional, TYPE_CHECKING
 
+from postgres_upgrader.compose_inspector import DockerComposeConfig
+
 if TYPE_CHECKING:
     from .prompt import ServiceVolumeConfig
 
@@ -75,6 +77,7 @@ class DockerManager:
     def stop_service_container(self, name: str):
         try:
             subprocess.run(["docker", "compose", "stop", name], check=True)
+            subprocess.run(["docker", "compose", "rm", name], check=True)
         except subprocess.CalledProcessError as e:
             raise Exception(f"Failed to stop service {name}: {e}")
 
@@ -90,21 +93,38 @@ class DockerManager:
         except subprocess.CalledProcessError as e:
             raise Exception(f"Failed to build service {name}: {e}")
 
-    def replace_service_main_volume(self, service_config: "ServiceVolumeConfig"):
+    def remove_service_main_volume(
+        self,
+        compose_config: "DockerComposeConfig",
+        service_config: "ServiceVolumeConfig",
+    ):
         if service_config.main_volume.name is None:
             raise Exception("Main volume not found in service configuration")
 
+        # Find the main_volume in the compose config to ensure it exists
+        target_volume = None
+        for vol in compose_config.get_volumes(service_config.name):
+            if vol.name == service_config.main_volume.name:
+                target_volume = vol
+                break
+
+        if target_volume is None:
+            raise Exception(
+                f"Main volume '{service_config.main_volume.name}' not found in compose configuration"
+            )
+
+        if target_volume.resolved_name is None:
+            raise Exception(
+                "Main volume does not have a resolved name in compose configuration"
+            )
+
         try:
             subprocess.run(
-                ["docker", "volume", "rm", service_config.main_volume.name], check=True
-            )
-            subprocess.run(
-                ["docker", "volume", "create", service_config.main_volume.name],
-                check=True,
+                ["docker", "volume", "rm", target_volume.resolved_name], check=True
             )
         except subprocess.CalledProcessError as e:
             raise Exception(
-                f"Failed to replace volume {service_config.main_volume.name}: {e}"
+                f"Failed to remove volume {service_config.main_volume.name}: {e}"
             )
 
     def find_container_by_service(self, name: str):

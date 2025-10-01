@@ -93,12 +93,12 @@ def identify_service_volumes(
 
     # Convert VolumeMount objects to strings for user selection
     volume_choices = [vol.raw for vol in volumes]
-    
+
     # Choose the main volume
     main_choice = prompt_user_choice(volume_choices, "Select the main volume:")
     if not main_choice:
         return None
-    
+
     # Find the corresponding VolumeMount object
     main_volume = next(vol for vol in volumes if vol.raw == main_choice)
 
@@ -109,7 +109,7 @@ def identify_service_volumes(
     backup_choice = prompt_user_choice(remaining_choices, "Select the backup volume:")
     if not backup_choice:
         return None
-    
+
     # Find the corresponding VolumeMount object
     backup_volume = next(vol for vol in volumes if vol.raw == backup_choice)
 
@@ -117,5 +117,5 @@ def identify_service_volumes(
     return ServiceVolumeConfig(
         name=service_name,
         main_volume=VolumeInfo(name=main_volume.name, dir=main_volume.path),
-        backup_volume=VolumeInfo(name=backup_volume.name, dir=backup_volume.path)
+        backup_volume=VolumeInfo(name=backup_volume.name, dir=backup_volume.path),
     )

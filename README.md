@@ -1,13 +1,12 @@
 # PostgreSQL Upgrader
 
-A specialized tool for managing PostgreSQL upgrades in Docker Compose environments. This tool helps you identify and select Docker Compose services and their associated volumes for PostgreSQL upgrade operations.
+A specialized tool for managing PostgreSQL upgrades in Docker Compose environments. This tool uses Docker Compose's own resolution engine to analyze your project configuration and help you identify and select services and their associated volumes for PostgreSQL upgrade operations.
 
 ## Features
 
-- 🔍 **Interactive Service Selection**: Choose from available Docker Compose services
-- 📦 **Volume Identification**: Identify main and backup volumes for PostgreSQL services
-- 🎯 **Upgrade-Focused**: Specifically designed for PostgreSQL upgrade workflows
-- 🖥️ **User-Friendly CLI**: Interactive prompts with arrow-key navigation
+- 🔍 **Smart Configuration Parsing**: Uses `docker compose config` for accurate, resolved configuration analysis
+- 🎯 **Upgrade-Focused**: Specifically designed for PostgreSQL upgrade workflows  
+- 🖥️ **No File Path Dependencies**: Works from any Docker Compose project directory
 - 📝 **Intuitive Interface**: Interactive prompts with arrow-key navigation
 - ✅ **Well-Tested**: Comprehensive test suite with 15+ tests
 
@@ -44,33 +43,39 @@ poetry install
 
 ### Prerequisites
 
-The tool needs PostgreSQL credentials which can be provided in two ways:
+The tool requires:
 
-1. **Via `.env` file** (recommended):
-
-   ```bash
-   POSTGRES_USER=your_postgres_user
-   POSTGRES_DB=your_database_name
-   ```
-
-2. **Via Docker Compose environment variables**: The tool will automatically fall back to reading credentials from your `docker-compose.yml` file if no `.env` file is found.
+1. **Docker Compose**: Must be installed and accessible via `docker compose config`
+2. **Docker Compose Project**: Run the tool from a directory containing a `docker-compose.yml` file
+3. **PostgreSQL Credentials**: Can be provided via:
+   - **`.env` file** (recommended):
+     ```bash
+     POSTGRES_USER=your_postgres_user
+     POSTGRES_DB=your_database_name
+     ```
+   - **Docker Compose environment variables**: The tool automatically reads resolved credentials from your Docker Compose configuration
 
 ### Command Line Tool
 
 ```bash
-# With uv
-uv run ./main.py docker-compose.yml
+# Navigate to your Docker Compose project directory
+cd /path/to/your/docker-compose-project
 
-# After installation with any package manager
-./main.py docker-compose.yml
+# With uv (from the postgres-updater directory)
+uv run main.py
+
+# After installation with pip/poetry
+python -m postgres_upgrader
+# or if installed globally:
+postgres-updater
 ```
 
 The tool will:
 
-1. Parse your Docker Compose file
-2. Interactively prompt you to select a service
-3. Let you choose main and backup volumes
-4. Attempt to create a PostgreSQL backup using the selected configuration
+1. Analyze your Docker Compose configuration using `docker compose config`
+2. Interactively prompt you to select a service and volumes
+3. Access resolved environment variables for credentials
+4. Create a PostgreSQL backup using the selected configuration
 
 ### Example Output
 
@@ -80,48 +85,59 @@ The tool will:
    nginx
 
 [?] Select the main volume::
- > database:/var/lib/postgresql/data
-   backups:/var/lib/postgresql/backups
+ > database:/var/lib/postgresql/data (resolved as: postgres-updater_database)
+   backups:/var/lib/postgresql/backups (resolved as: postgres-updater_backups)
 
 [?] Select the backup volume::
- > backups:/var/lib/postgresql/backups
+ > backups:/var/lib/postgresql/backups (resolved as: postgres-updater_backups)
 
 Backup location: /var/lib/postgresql/backups
+Creating backup using resolved volume: postgres-updater_backups
 ```
+
+## How It Works
+
+This tool uses **Docker Compose's own configuration resolution** via the `docker compose config` command to get the exact same configuration that Docker Compose would use, including:
+
+- **Environment Variables**: Automatically resolves all variable substitutions  
+- **Volume Prefixes**: Gets actual volume names with project prefixes (e.g., `postgres-updater_database`)
+- **Network Resolution**: Handles complex networking configurations
+- **Real-time Configuration**: Always reflects current project state
+- **Error Prevention**: Eliminates manual parsing inconsistencies
 
 ### As a Library
 
 ```python
-# Basic usage - parse and analyze Docker Compose files
+# Basic usage - analyze Docker Compose configuration
 from postgres_upgrader import parse_docker_compose
 
-# Parse Docker Compose file once
-compose_data = parse_docker_compose("docker-compose.yml")
+# Parse Docker Compose configuration
+compose_data = parse_docker_compose()
 
-# Get services from parsed data
+# Get services and volumes
 services = compose_data.services
 print("Available services:", list(services.keys()))
 
-# Get volumes for a specific service
 volumes = compose_data.get_volumes("postgres")
 print("Postgres volumes:", [v.raw for v in volumes])
 
-# Access specific volume information directly from VolumeMount objects
+# Access volume information
 backup_volume = next((v for v in volumes if v.name == "backups"), None)
 data_volume = next((v for v in volumes if v.name == "database"), None)
 
 if backup_volume:
     print(f"Backup volume path: {backup_volume.path}")
+    print(f"Resolved volume name: {backup_volume.resolved_name}")  # e.g., "postgres-updater_backups"
 if data_volume:
     print(f"Data volume path: {data_volume.path}")
+    print(f"Resolved volume name: {data_volume.resolved_name}")  # e.g., "postgres-updater_database"
 ```
 
 ```python
 # Interactive volume selection
 from postgres_upgrader import parse_docker_compose, identify_service_volumes
 
-# Parse compose file and interactively select volumes
-compose_data = parse_docker_compose("docker-compose.yml")
+compose_data = parse_docker_compose()
 volume_config = identify_service_volumes(compose_data)
 
 if volume_config:
@@ -132,7 +148,7 @@ if volume_config:
 ```
 
 ```python
-# Full backup workflow with credential fallback
+# Full backup workflow
 from postgres_upgrader import (
     parse_docker_compose,
     identify_service_volumes,
@@ -141,19 +157,17 @@ from postgres_upgrader import (
     get_database_name
 )
 
-# Parse and select volumes
-compose_data = parse_docker_compose("docker-compose.yml")
+compose_data = parse_docker_compose()
 volume_config = identify_service_volumes(compose_data)
 
 if volume_config:
     service_name = volume_config.name
 
-    # Try to get credentials from .env file, fallback to Docker Compose
+    # Try to get credentials from .env file, fallback to Docker Compose environment
     try:
         user = get_database_user()
         database = get_database_name()
     except Exception:
-        # Fallback to Docker Compose environment variables using data class methods
         user = compose_data.get_postgres_user(service_name)
         database = compose_data.get_postgres_db(service_name)
 
@@ -165,7 +179,7 @@ if volume_config:
 
 ## Development
 
-### Running Tests
+### Testing and Code Quality
 
 ```bash
 # Run all tests
@@ -179,39 +193,6 @@ uv run pytest tests/test_parse_docker_compose.py
 
 # Run with coverage
 uv run pytest --cov=src/postgres_upgrader
-```
-
-### Project Structure
-
-```
-postgres-upgrader/
-├── src/postgres_upgrader/          # Main package
-│   ├── __init__.py                 # Package exports
-│   ├── compose_inspector.py       # Docker Compose parsing and analysis
-│   ├── prompt.py                  # User interaction and volume selection
-│   ├── docker.py                  # Docker operations and PostgreSQL backup
-│   └── env.py                     # Environment configuration management
-├── tests/                         # Test suite
-│   ├── test_docker.py              # Docker operations tests
-│   ├── test_parse_docker_compose.py  # Core functionality tests
-│   └── test_user_choice.py          # User interaction tests
-├── main.py                        # CLI entry point
-├── pyproject.toml                 # Project configuration
-├── uv.lock                        # Dependency lock file (uv)
-└── README.md                      # This file
-```
-
-### Code Quality
-
-```bash
-# Running tests (included in project dependencies)
-uv run pytest
-
-# Run with verbose output
-uv run pytest -v
-
-# Run specific test file
-uv run pytest tests/test_parse_docker_compose.py
 ```
 
 #### Development Tools
@@ -234,11 +215,32 @@ uv run mypy src/           # Type checking
 uv run pytest --cov=src/postgres_upgrader  # Coverage reporting
 ```
 
+### Project Structure
+
+```
+postgres-upgrader/
+├── src/postgres_upgrader/          # Main package
+│   ├── __init__.py                 # Package exports
+│   ├── compose_inspector.py       # Docker Compose config parsing via subprocess
+│   ├── prompt.py                  # User interaction and volume selection
+│   ├── docker.py                  # Docker operations and PostgreSQL backup
+│   └── env.py                     # Environment configuration management
+├── tests/                         # Test suite
+│   ├── test_docker.py              # Docker operations tests
+│   ├── test_parse_docker_compose.py  # Config resolution tests
+│   └── test_user_choice.py          # User interaction tests
+├── main.py                        # CLI entry point
+├── pyproject.toml                 # Project configuration
+├── uv.lock                        # Dependency lock file (uv)
+└── README.md                      # This file
+```
+
 ## Requirements
 
 - Python 3.13+
-- Docker Compose files in YAML format with PostgreSQL service
+- Docker Compose v2+ (accessible via `docker compose config` command)
 - PostgreSQL credentials either in `.env` file or Docker Compose environment variables
+- A Docker Compose project with `docker-compose.yml` file
 - Dependencies: `pyyaml`, `inquirer`, `docker`, `python-dotenv`, `pytest`
 
 ## Future Enhancements

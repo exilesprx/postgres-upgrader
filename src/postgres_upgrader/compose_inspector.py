@@ -1,4 +1,5 @@
 import yaml
+import subprocess
 from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 
@@ -6,24 +7,43 @@ from dataclasses import dataclass, field
 @dataclass
 class VolumeMount:
     """Information about a Docker volume mount."""
+
     name: Optional[str]  # e.g., "database"
     path: Optional[str]  # e.g., "/var/lib/postgresql/data"
-    raw: str   # e.g., "database:/var/lib/postgresql/data"
-    
+    raw: str  # e.g., "database:/var/lib/postgresql/data"
+    resolved_name: Optional[str] = None  # e.g., "postgres-updater_database"
+
     @classmethod
-    def from_string(cls, volume_string: str) -> "VolumeMount":
-        """Parse a Docker Compose volume string into a VolumeMount object."""
-        if ":" in volume_string:
-            parts = volume_string.split(":", 1)  # Split on first colon only
-            return cls(name=parts[0], path=parts[1], raw=volume_string)
+    def from_string(
+        cls, volume_config: dict, volume_mappings: Optional[Dict[str, dict]] = None
+    ) -> "VolumeMount":
+        """Parse a Docker Compose config dict into a VolumeMount object."""
+
+        if volume_config.get("type") == "volume":
+            # This is a named volume with resolved names
+            source = volume_config.get("source")
+            target_path = volume_config.get("target", "")
+            raw = f"{source}:{target_path}" if source else target_path
+
+            # Get the resolved name from the volumes section
+            resolved_name = None
+            if source and volume_mappings and source in volume_mappings:
+                resolved_name = volume_mappings[source].get("name", source)
+
+            return cls(
+                name=source, path=target_path, raw=raw, resolved_name=resolved_name
+            )
         else:
-            # Invalid format or named volume without host path
-            return cls(name=None, path=None, raw=volume_string)
+            # Handle other volume types
+            target_path = volume_config.get("target", "")
+            raw = f"unknown:{target_path}"
+            return cls(name=None, path=target_path, raw=raw)
 
 
 @dataclass
 class ServiceConfig:
     """Configuration for a Docker Compose service."""
+
     name: str
     environment: Dict[str, str] = field(default_factory=dict)
     volumes: List[VolumeMount] = field(default_factory=list)
@@ -56,20 +76,51 @@ class DockerComposeConfig:
         return service.environment.get("POSTGRES_DB") if service else None
 
 
-def parse_docker_compose(file_path: str) -> DockerComposeConfig:
-    """Parse a Docker Compose YAML file into structured data."""
-    with open(file_path, "r") as f:
-        raw_data = yaml.safe_load(f)
+def parse_docker_compose() -> DockerComposeConfig:
+    """
+    Parse Docker Compose configuration using 'docker compose config'.
+
+    This approach gets the fully resolved configuration with:
+    - Environment variables substituted
+    - Actual volume names (with prefixes)
+    - Real network names
+    - All computed values
+
+    Args:
+        file_path: Ignored. Kept for API compatibility only.
+
+    Returns:
+        DockerComposeConfig with resolved values
+
+    Raises:
+        RuntimeError: If docker compose config fails or Docker Compose not available
+    """
+    try:
+        result = subprocess.run(
+            ["docker", "compose", "config"], capture_output=True, text=True, check=True
+        )
+        raw_data = yaml.safe_load(result.stdout)
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"Failed to get docker compose config: {e.stderr}") from e
+    except FileNotFoundError as e:
+        raise RuntimeError(
+            "Docker Compose not found. Please ensure docker compose is installed."
+        ) from e
 
     services = {}
     raw_services = raw_data.get("services", {})
+    volume_mappings = raw_data.get("volumes", {})
 
     for service_name, service_data in raw_services.items():
-        # Parse volumes into structured data at parse time
+        # Parse volumes from resolved config format
         volume_mounts = []
-        for volume_string in service_data.get("volumes", []):
-            volume_mounts.append(VolumeMount.from_string(volume_string))
-        
+        for volume_config in service_data.get("volumes", []):
+            if isinstance(volume_config, dict):
+                volume_mount = VolumeMount.from_string(
+                    volume_config, volume_mappings=volume_mappings
+                )
+                volume_mounts.append(volume_mount)
+
         services[service_name] = ServiceConfig(
             name=service_name,
             environment=service_data.get("environment", {}),

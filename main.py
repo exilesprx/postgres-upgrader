@@ -4,60 +4,43 @@ PostgreSQL Docker Compose backup location extractor.
 """
 
 import sys
-import os
 from typing import Tuple, Optional, TYPE_CHECKING
 from postgres_upgrader import (
     identify_service_volumes,
     DockerManager,
     parse_docker_compose,
 )
-from postgres_upgrader.env import get_database_user, get_database_name
 
 if TYPE_CHECKING:
     from postgres_upgrader.compose_inspector import DockerComposeConfig
 
 
 def get_credentials(
-    compose_data: "DockerComposeConfig", service_name: str
+    compose_config: "DockerComposeConfig", service_name: str
 ) -> Tuple[Optional[str], Optional[str]]:
     """
-    Get PostgreSQL credentials with .env fallback to Docker Compose.
+    Get PostgreSQL credentials from resolved Docker Compose configuration.
 
     Returns:
         tuple: (user, database) or (None, None) if not found
     """
-    try:
-        user = get_database_user()
-    except Exception:
-        user = compose_data.get_postgres_user(service_name)
-
-    try:
-        database = get_database_name()
-    except Exception:
-        database = compose_data.get_postgres_db(service_name)
-
+    user = compose_config.get_postgres_user(service_name)
+    database = compose_config.get_postgres_db(service_name)
     return user, database
 
 
 def main() -> None:
     """Main CLI entry point."""
-    if len(sys.argv) < 2:
-        print("Usage: ./main.py <docker-compose.yml>")
-        sys.exit(1)
-
-    compose_file = sys.argv[1]
-
-    # Validate input file exists
-    if not os.path.exists(compose_file):
-        print(f"Error: File '{compose_file}' not found")
-        sys.exit(1)
 
     try:
-        compose = parse_docker_compose(compose_file)
+        compose_config = parse_docker_compose()
     except Exception as e:
-        print(f"Error parsing Docker Compose file: {e}")
+        print(f"Error getting Docker Compose configuration: {e}")
+        print(
+            "Make sure you're in a directory with a docker-compose.yml file and Docker Compose is installed."
+        )
         sys.exit(1)
-    service_volume_config = identify_service_volumes(compose)
+    service_volume_config = identify_service_volumes(compose_config)
 
     if not service_volume_config:
         print("No volumes found or selection cancelled")
@@ -70,14 +53,12 @@ def main() -> None:
         print("Error: Service name not found in selection")
         sys.exit(1)
 
-    # TODO: prompt for postgres container user. Default is postgres
-
-    # Get credentials with fallback logic
-    user, database = get_credentials(compose, service_name)
+    # Get credentials from resolved Docker Compose configuration
+    user, database = get_credentials(compose_config, service_name)
 
     if not user or not database:
         print(
-            "Error: Could not find PostgreSQL credentials in .env file or Docker Compose environment"
+            "Error: Could not find PostgreSQL credentials in Docker Compose configuration"
         )
         sys.exit(1)
 
@@ -87,7 +68,7 @@ def main() -> None:
             docker_mgr.stop_service_container(service_name)
             docker_mgr.update_service_container(service_name)
             docker_mgr.build_service_container(service_name)
-            docker_mgr.replace_service_main_volume(service_volume_config)
+            docker_mgr.remove_service_main_volume(compose_config, service_volume_config)
     except Exception as e:
         print(f"Error: {e}")
         sys.exit(1)
