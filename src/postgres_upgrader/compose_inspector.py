@@ -71,11 +71,36 @@ class ServiceConfig:
         return self.selected_backup_volume.path if self.selected_backup_volume else None
 
     def is_configured_for_postgres_upgrade(self) -> bool:
-        """Check if volumes are selected for PostgreSQL upgrade."""
-        return (
-            self.selected_main_volume is not None
-            and self.selected_backup_volume is not None
-        )
+        """
+        Check if volumes are selected and valid for PostgreSQL upgrade operations.
+
+        Validates that:
+        - Both main and backup volumes are selected
+        - Backup volume is not the same as the main volume
+        - Backup volume path is not nested inside the main volume path
+
+        Returns:
+            bool: True if configuration is valid for upgrade, False otherwise
+        """
+        # Check if both volumes are selected
+        if not self.selected_main_volume or not self.selected_backup_volume:
+            return False
+
+        # Check for same volume
+        if self.selected_main_volume.name == self.selected_backup_volume.name:
+            return False
+
+        # Check for nested paths
+        main_path = self.selected_main_volume.path or ""
+        backup_path = self.selected_backup_volume.path or ""
+
+        main_path = main_path.rstrip("/")
+        backup_path = backup_path.rstrip("/")
+
+        if backup_path.startswith(main_path + "/") or backup_path == main_path:
+            return False
+
+        return True
 
 
 @dataclass

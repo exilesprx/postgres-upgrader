@@ -231,3 +231,82 @@ class TestVolumeMount:
         )
 
         assert result == expected
+
+
+class TestVolumeValidation:
+    """Test volume validation for PostgreSQL upgrade operations."""
+
+    def test_valid_volume_configuration(self):
+        """Test that valid volume configuration passes validation."""
+        from postgres_upgrader.compose_inspector import ServiceConfig
+        
+        service = ServiceConfig(name="test")
+        main_vol = VolumeMount(
+            name="database", 
+            path="/var/lib/postgresql/data", 
+            raw="database:/var/lib/postgresql/data"
+        )
+        backup_vol = VolumeMount(
+            name="backups", 
+            path="/var/lib/postgresql/backups", 
+            raw="backups:/var/lib/postgresql/backups"
+        )
+        service.select_volumes(main_vol, backup_vol)
+        
+        assert service.is_configured_for_postgres_upgrade() is True
+
+    def test_same_volume_configuration(self):
+        """Test that same volume for main and backup fails validation."""
+        from postgres_upgrader.compose_inspector import ServiceConfig
+        
+        service = ServiceConfig(name="test")
+        same_vol = VolumeMount(
+            name="database", 
+            path="/var/lib/postgresql/data", 
+            raw="database:/var/lib/postgresql/data"
+        )
+        service.select_volumes(same_vol, same_vol)
+        
+        assert service.is_configured_for_postgres_upgrade() is False
+
+    def test_nested_path_configuration(self):
+        """Test that backup volume inside main volume fails validation."""
+        from postgres_upgrader.compose_inspector import ServiceConfig
+        
+        service = ServiceConfig(name="test")
+        main_vol = VolumeMount(
+            name="database", 
+            path="/var/lib/postgresql/data", 
+            raw="database:/var/lib/postgresql/data"
+        )
+        backup_vol = VolumeMount(
+            name="backups", 
+            path="/var/lib/postgresql/data/backups", 
+            raw="backups:/var/lib/postgresql/data/backups"
+        )
+        service.select_volumes(main_vol, backup_vol)
+        
+        assert service.is_configured_for_postgres_upgrade() is False
+
+    def test_no_volumes_selected(self):
+        """Test that no volumes selected fails validation."""
+        from postgres_upgrader.compose_inspector import ServiceConfig
+        
+        service = ServiceConfig(name="test")
+        
+        assert service.is_configured_for_postgres_upgrade() is False
+
+    def test_only_main_volume_selected(self):
+        """Test that only main volume selected fails validation."""
+        from postgres_upgrader.compose_inspector import ServiceConfig
+        
+        service = ServiceConfig(name="test")
+        main_vol = VolumeMount(
+            name="database", 
+            path="/var/lib/postgresql/data", 
+            raw="database:/var/lib/postgresql/data"
+        )
+        service.selected_main_volume = main_vol
+        # Leave backup volume as None
+        
+        assert service.is_configured_for_postgres_upgrade() is False
