@@ -9,7 +9,7 @@ A specialized tool for managing PostgreSQL upgrades in Docker Compose environmen
 - 🖥️ **No File Path Dependencies**: Works from any Docker Compose project directory
 - 📝 **Intuitive Interface**: Interactive prompts with arrow-key navigation
 - 🚀 **Automated Workflow**: Single method performs complete upgrade sequence
-- ✅ **Well-Tested**: Comprehensive test suite with 24 tests
+- ✅ **Well-Tested**: Comprehensive test suite with 35 tests
 
 ## Installation
 
@@ -122,7 +122,6 @@ This tool uses **Docker Compose's own configuration resolution** via the `docker
 
 ### Architecture Highlights
 
-- **Clean Constructor API**: `DockerManager` takes all required parameters once (`service_config`, `container_user`, `database_user`, `database_name`) eliminating parameter repetition across method calls
 - **Context Manager**: Automatic Docker client lifecycle management with proper resource cleanup
 - **Instance Variables**: Methods use stored credentials rather than requiring parameters, reducing errors and improving consistency
 
