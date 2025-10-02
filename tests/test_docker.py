@@ -401,3 +401,327 @@ class TestDockerManagerErrorHandling:
                     Exception, match="Multiple containers found for service postgres"
                 ):
                     docker_mgr.create_postgres_backup()
+
+
+class TestDockerManagerIntegration:
+    """Mock-based integration tests for DockerManager workflows."""
+
+    def setup_method(self):
+        """Set up test fixtures for each test method."""
+        self.service_config = ServiceConfig(
+            name="postgres",
+            volumes=[
+                VolumeMount(
+                    name="database",
+                    path="/var/lib/postgresql/data",
+                    raw="database:/var/lib/postgresql/data",
+                    resolved_name="test_database",
+                ),
+                VolumeMount(
+                    name="backups",
+                    path="/var/lib/postgresql/backups",
+                    raw="backups:/var/lib/postgresql/backups",
+                    resolved_name="test_backups",
+                ),
+            ],
+        )
+        self.service_config.selected_main_volume = self.service_config.volumes[0]
+        self.service_config.selected_backup_volume = self.service_config.volumes[1]
+
+    def test_full_postgres_upgrade_workflow_success(self):
+        """Test complete successful PostgreSQL upgrade workflow."""
+        with (
+            patch("postgres_upgrader.docker.docker.from_env") as mock_docker,
+            patch("postgres_upgrader.docker.subprocess.run") as mock_subprocess,
+        ):
+            mock_client = MagicMock()
+            mock_docker.return_value = mock_client
+
+            # Mock successful subprocess calls (Docker commands)
+            mock_subprocess.return_value = MagicMock(returncode=0)
+
+            # Mock a successful container
+            mock_container = MagicMock()
+            mock_container.name = "test_postgres"
+            mock_client.containers.list.return_value = [mock_container]
+
+            # Mock successful command executions in sequence with enough responses
+            mock_container.exec_run.side_effect = [
+                (0, b"Backup created successfully"),  # create_postgres_backup
+                (0, b"Data imported successfully"),  # import_data_from_backup
+                (0, b"Collation version updated"),  # update_collation_version
+                (0, b"Extra response 1"),  # Additional calls
+                (0, b"Extra response 2"),  # Additional calls
+                (0, b"Extra response 3"),  # Additional calls
+            ]
+
+            with DockerManager(
+                self.service_config, "postgres", "testuser", "testdb"
+            ) as docker_mgr:
+                # Mock container health check for import
+                with patch.object(
+                    docker_mgr, "check_container_status", return_value=True
+                ):
+                    # Note: perform_postgres_upgrade() currently returns None (no return statement)
+                    # This test verifies the workflow completes without error
+                    result = docker_mgr.perform_postgres_upgrade()
+
+                    # Current implementation doesn't return backup path (could be improved)
+                    assert result is None  # Current behavior
+
+                    # Verify Docker commands were called
+                    assert (
+                        mock_subprocess.call_count >= 2
+                    )  # At least stop and volume operations
+
+                    # Verify container operations
+                    assert mock_container.exec_run.call_count >= 3
+
+    def test_backup_and_import_workflow(self):
+        """Test backup creation followed by data import."""
+        with patch("postgres_upgrader.docker.docker.from_env") as mock_docker:
+            mock_client = MagicMock()
+            mock_docker.return_value = mock_client
+
+            mock_container = MagicMock()
+            mock_container.name = "test_postgres"
+            mock_client.containers.list.return_value = [mock_container]
+
+            # Mock successful backup and import with enough responses
+            mock_container.exec_run.side_effect = [
+                (0, b"Backup created"),  # create_postgres_backup
+                (0, b"Data imported from backup"),  # import_data_from_backup
+                (0, b"Extra response"),  # Buffer for additional calls
+            ]
+
+            with DockerManager(
+                self.service_config, "postgres", "testuser", "testdb"
+            ) as docker_mgr:
+                # Mock container health check for import
+                with patch.object(
+                    docker_mgr, "check_container_status", return_value=True
+                ):
+                    # Test backup creation
+                    backup_path = docker_mgr.create_postgres_backup()
+                    assert backup_path is not None
+
+                    # Test data import from the backup
+                    docker_mgr.import_data_from_backup(backup_path)
+
+                    # Verify both operations called container
+                    assert mock_container.exec_run.call_count >= 2
+
+    def test_service_discovery_workflow(self):
+        """Test service discovery and container finding logic."""
+        with patch("postgres_upgrader.docker.docker.from_env") as mock_docker:
+            mock_client = MagicMock()
+            mock_docker.return_value = mock_client
+
+            # Mock container discovery
+            mock_container = MagicMock()
+            mock_container.name = "test_postgres"
+            mock_client.containers.list.return_value = [mock_container]
+
+            with DockerManager(
+                self.service_config, "postgres", "testuser", "testdb"
+            ) as docker_mgr:
+                # Test internal service discovery
+                container = docker_mgr.find_container_by_service()
+                assert container == mock_container
+
+                # Verify correct Docker API call
+                mock_client.containers.list.assert_called_with(
+                    filters={"label": "com.docker.compose.service=postgres"}
+                )
+
+    def test_workflow_with_environment_variables(self):
+        """Test workflow uses instance variables correctly."""
+        with patch("postgres_upgrader.docker.docker.from_env") as mock_docker:
+            mock_client = MagicMock()
+            mock_docker.return_value = mock_client
+
+            mock_container = MagicMock()
+            mock_container.name = "test_postgres"
+            mock_container.exec_run.return_value = (0, b"Success")
+            mock_client.containers.list.return_value = [mock_container]
+
+            # Test with specific credentials
+            with DockerManager(
+                self.service_config, "custom_user", "db_user", "my_database"
+            ) as docker_mgr:
+                docker_mgr.create_postgres_backup()
+
+                # Verify the correct user and database were used in pg_dump command
+                call_args = mock_container.exec_run.call_args
+                cmd = call_args[0][0]  # First positional argument (command list)
+
+                assert "pg_dump" in cmd
+                assert "db_user" in cmd  # database_user
+                assert "my_database" in cmd  # database_name
+
+                # Verify container user was passed correctly
+                kwargs = call_args[1]  # Keyword arguments
+                assert kwargs.get("user") == "custom_user"
+
+    def test_collation_update_workflow(self):
+        """Test collation version update workflow."""
+        with patch("postgres_upgrader.docker.docker.from_env") as mock_docker:
+            mock_client = MagicMock()
+            mock_docker.return_value = mock_client
+
+            mock_container = MagicMock()
+            mock_container.name = "test_postgres"
+            mock_container.exec_run.return_value = (0, b"Collation updated")
+            mock_client.containers.list.return_value = [mock_container]
+
+            with DockerManager(
+                self.service_config, "postgres", "testuser", "testdb"
+            ) as docker_mgr:
+                docker_mgr.update_collation_version()
+
+                # Verify SQL command was executed
+                call_args = mock_container.exec_run.call_args
+                cmd = call_args[0][0]
+
+                assert "psql" in cmd
+                assert "REFRESH COLLATION VERSION" in " ".join(cmd)  # Correct command
+
+    def test_workflow_error_recovery(self):
+        """Test workflow behavior when individual steps fail."""
+        with patch("postgres_upgrader.docker.docker.from_env") as mock_docker:
+            mock_client = MagicMock()
+            mock_docker.return_value = mock_client
+
+            mock_container = MagicMock()
+            mock_container.name = "test_postgres"
+            mock_client.containers.list.return_value = [mock_container]
+
+            # Mock backup success but import failure
+            mock_container.exec_run.side_effect = [
+                (0, b"Backup created successfully"),  # create_postgres_backup succeeds
+                (
+                    1,
+                    b"Import failed: connection error",
+                ),  # import_data_from_backup fails
+            ]
+
+            with DockerManager(
+                self.service_config, "postgres", "testuser", "testdb"
+            ) as docker_mgr:
+                # Backup should succeed
+                backup_path = docker_mgr.create_postgres_backup()
+                assert backup_path is not None
+
+                # Mock container health check failure
+                with patch.object(
+                    docker_mgr, "check_container_status", return_value=False
+                ):
+                    # Import should fail with health check error
+                    with pytest.raises(Exception, match="Container is not healthy"):
+                        docker_mgr.import_data_from_backup(backup_path)
+
+    def test_multiple_method_calls_same_instance(self):
+        """Test multiple operations on same DockerManager instance."""
+        with (
+            patch("postgres_upgrader.docker.docker.from_env") as mock_docker,
+            patch("postgres_upgrader.docker.datetime") as mock_datetime,
+        ):
+            mock_client = MagicMock()
+            mock_docker.return_value = mock_client
+
+            # Mock different timestamps for different calls
+            mock_datetime.now.return_value.strftime.side_effect = [
+                "20251002_100000",  # First backup
+                "20251002_100001",  # Second backup
+            ]
+
+            mock_container = MagicMock()
+            mock_container.name = "test_postgres"
+            mock_container.exec_run.return_value = (0, b"Success")
+            mock_client.containers.list.return_value = [mock_container]
+
+            with DockerManager(
+                self.service_config, "postgres", "testuser", "testdb"
+            ) as docker_mgr:
+                # Multiple operations should reuse same instance data
+                backup_path1 = docker_mgr.create_postgres_backup()
+                backup_path2 = docker_mgr.create_postgres_backup()
+                docker_mgr.update_collation_version()
+
+                # Should have same configuration but different timestamps
+                assert backup_path1 != backup_path2  # Different timestamps
+                assert "/var/lib/postgresql/backups/" in backup_path1
+                assert "/var/lib/postgresql/backups/" in backup_path2
+
+                # Verify container discovery happened multiple times but with same instance
+                assert mock_client.containers.list.call_count >= 3
+
+    def test_context_manager_workflow(self):
+        """Test that context manager properly manages Docker client lifecycle."""
+        with patch("postgres_upgrader.docker.docker.from_env") as mock_docker:
+            mock_client = MagicMock()
+            mock_docker.return_value = mock_client
+
+            # Test context manager entry and exit
+            with DockerManager(
+                self.service_config, "postgres", "testuser", "testdb"
+            ) as docker_mgr:
+                assert docker_mgr.client is mock_client
+                assert docker_mgr.container_user == "postgres"
+                assert docker_mgr.database_user == "testuser"
+                assert docker_mgr.database_name == "testdb"
+
+            # After context exit, client should be accessible but instance should be complete
+            mock_docker.assert_called_once()
+
+    def test_workflow_with_complex_service_config(self):
+        """Test workflow with complex service configuration."""
+        # Create a more complex service config
+        complex_config = ServiceConfig(
+            name="complex-postgres-service",
+            environment={
+                "POSTGRES_USER": "admin",
+                "POSTGRES_DB": "production_db",
+                "POSTGRES_PASSWORD": "secret",
+            },
+            volumes=[
+                VolumeMount(
+                    name="primary_data",
+                    path="/var/lib/postgresql/data",
+                    raw="primary_data:/var/lib/postgresql/data",
+                    resolved_name="complex_project_primary_data",
+                ),
+                VolumeMount(
+                    name="backup_storage",
+                    path="/backups",
+                    raw="backup_storage:/backups",
+                    resolved_name="complex_project_backup_storage",
+                ),
+            ],
+        )
+        complex_config.selected_main_volume = complex_config.volumes[0]
+        complex_config.selected_backup_volume = complex_config.volumes[1]
+
+        with patch("postgres_upgrader.docker.docker.from_env") as mock_docker:
+            mock_client = MagicMock()
+            mock_docker.return_value = mock_client
+
+            mock_container = MagicMock()
+            mock_container.name = "complex-postgres-service"
+            mock_container.exec_run.return_value = (0, b"Success")
+            mock_client.containers.list.return_value = [mock_container]
+
+            with DockerManager(
+                complex_config, "postgres", "admin", "production_db"
+            ) as docker_mgr:
+                backup_path = docker_mgr.create_postgres_backup()
+
+                # Verify backup path uses correct volume
+                assert "/backups/backup-" in backup_path
+
+                # Verify correct service label filter
+                mock_client.containers.list.assert_called_with(
+                    filters={
+                        "label": "com.docker.compose.service=complex-postgres-service"
+                    }
+                )
