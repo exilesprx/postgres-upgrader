@@ -97,6 +97,12 @@ class ServiceConfig:
         main_path = main_path.rstrip("/")
         backup_path = backup_path.rstrip("/")
 
+        # Docker standard PostgreSQL data directory check
+        if "/var/lib/postgresql/data" == backup_path:
+            raise Exception(
+                "You cannot use the default PostgreSQL data directory as a backup location. It will remove all existing data!"
+            )
+
         if backup_path.startswith(main_path + "/") or backup_path == main_path:
             return False
 
