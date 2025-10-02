@@ -17,10 +17,13 @@ class DockerManager:
 
     Args:
         service_config: ServiceConfig with selected volumes and resolved data (required)
+        container_user: User to run container commands as (e.g., "postgres")
+        database_user: PostgreSQL username for authentication
+        database_name: PostgreSQL database name for operations
 
     Example:
-        with DockerManager(selected_service) as docker_mgr:
-            docker_mgr.perform_postgres_upgrade(user, database)
+        with DockerManager(selected_service, "postgres", "myuser", "mydb") as docker_mgr:
+            docker_mgr.perform_postgres_upgrade()
     """
 
     def __init__(
@@ -90,7 +93,7 @@ class DockerManager:
         Export PostgreSQL data from a Docker container to a backup file.
 
         Uses the configured service and backup volume to create a timestamped
-        SQL dump of the specified PostgreSQL database.
+        SQL dump of the configured PostgreSQL database and user.
 
         Returns:
             str: Path to the created backup file (container path)
@@ -99,7 +102,7 @@ class DockerManager:
             Exception: If container not found, backup fails, or multiple containers exist
 
         Note:
-            Requires ServiceConfig to be set in the DockerManager constructor.
+            Uses the database_user and database_name from the constructor.
         """
         if not self.client:
             raise Exception(
@@ -190,20 +193,17 @@ class DockerManager:
         Import PostgreSQL data from a backup file into the database.
 
         Restores data from a SQL backup file created by create_postgres_backup()
-        into the specified PostgreSQL database running in a Docker container.
+        into the configured PostgreSQL database running in a Docker container.
 
         Args:
             backup_path: Container path to the SQL backup file to import
-
-        Returns:
-            int: Exit code (0 for success)
 
         Raises:
             Exception: If container not found, import fails, or DockerManager not initialized
 
         Note:
             The backup_path should be accessible from within the container.
-            Typically this is a path in the backup volume mount.
+            Uses the database_user and database_name from the constructor.
         """
         if not self.client:
             raise Exception(
@@ -231,7 +231,7 @@ class DockerManager:
 
         PostgreSQL major version upgrades may require updating collation versions
         to ensure compatibility with the new version's locale and collation system.
-        This method refreshes the collation version for the specified database.
+        This method refreshes the collation version for the configured database.
 
         Returns:
             bool: Always returns False (legacy behavior)
@@ -242,6 +242,7 @@ class DockerManager:
         Note:
             This should typically be called after a PostgreSQL major version upgrade
             to prevent collation-related warnings or errors.
+            Uses the database_user and database_name from the constructor.
         """
         container = self.find_container_by_service()
         cmd = [

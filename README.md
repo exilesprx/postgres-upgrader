@@ -9,7 +9,7 @@ A specialized tool for managing PostgreSQL upgrades in Docker Compose environmen
 - 🖥️ **No File Path Dependencies**: Works from any Docker Compose project directory
 - 📝 **Intuitive Interface**: Interactive prompts with arrow-key navigation
 - 🚀 **Automated Workflow**: Single method performs complete upgrade sequence
-- ✅ **Well-Tested**: Comprehensive test suite with 15+ tests
+- ✅ **Well-Tested**: Comprehensive test suite with 24 tests
 
 ## Installation
 
@@ -120,6 +120,12 @@ This tool uses **Docker Compose's own configuration resolution** via the `docker
 - **Real-time Configuration**: Always reflects current project state
 - **Error Prevention**: Eliminates manual parsing inconsistencies
 
+### Architecture Highlights
+
+- **Clean Constructor API**: `DockerManager` takes all required parameters once (`service_config`, `container_user`, `database_user`, `database_name`) eliminating parameter repetition across method calls
+- **Context Manager**: Automatic Docker client lifecycle management with proper resource cleanup
+- **Instance Variables**: Methods use stored credentials rather than requiring parameters, reducing errors and improving consistency
+
 ### As a Library
 
 ```python
@@ -157,9 +163,10 @@ volume_config = identify_service_volumes(compose_data)
 
 if volume_config:
     service_name = volume_config.name
-    backup_dir = volume_config.backup_volume.dir
-    print(f"Selected service: {service_name}")
-    print(f"Backup directory: {backup_dir}")
+    if volume_config.selected_backup_volume:
+        backup_path = volume_config.selected_backup_volume.path
+        print(f"Selected service: {service_name}")
+        print(f"Backup directory: {backup_path}")
 ```
 
 ```python
@@ -168,6 +175,7 @@ from postgres_upgrader import (
     parse_docker_compose,
     identify_service_volumes,
     DockerManager,
+    prompt_container_user,
 )
 
 compose_data = parse_docker_compose()
@@ -180,9 +188,12 @@ if selected_service:
     user = compose_data.get_postgres_user(service_name)
     database = compose_data.get_postgres_db(service_name)
 
-    # Create backup using DockerManager with selected service
-    with DockerManager(selected_service) as docker_mgr:
-        backup_path = docker_mgr.create_postgres_backup(user, database)
+    # Get container user (typically "postgres")
+    container_user = prompt_container_user()
+
+    # Create backup using DockerManager with all required parameters
+    with DockerManager(selected_service, container_user, user, database) as docker_mgr:
+        backup_path = docker_mgr.create_postgres_backup()
         print(f"Backup created: {backup_path}")
 ```
 
@@ -192,6 +203,7 @@ from postgres_upgrader import (
     parse_docker_compose,
     identify_service_volumes,
     DockerManager,
+    prompt_container_user,
 )
 
 compose_data = parse_docker_compose()
@@ -204,9 +216,12 @@ if selected_service:
     user = compose_data.get_postgres_user(service_name)
     database = compose_data.get_postgres_db(service_name)
 
+    # Get container user (typically "postgres")
+    container_user = prompt_container_user()
+
     # Perform complete upgrade workflow
-    with DockerManager(selected_service) as docker_mgr:
-        backup_path = docker_mgr.perform_postgres_upgrade(user, database)
+    with DockerManager(selected_service, container_user, user, database) as docker_mgr:
+        backup_path = docker_mgr.perform_postgres_upgrade()
         print(f"Upgrade completed! Backup: {backup_path}")
 ```
 
@@ -274,7 +289,8 @@ postgres-upgrader/
 - Docker Compose v2+ (accessible via `docker compose config` command)
 - PostgreSQL credentials either in `.env` file or Docker Compose environment variables
 - A Docker Compose project with `docker-compose.yml` file
-- Dependencies: `pyyaml`, `inquirer`, `docker`, `python-dotenv`, `pytest`
+- Dependencies: `pyyaml`, `inquirer`, `docker`
+- Dev Dependencies: `pytest`, `ruff`
 
 ## Future Enhancements
 
