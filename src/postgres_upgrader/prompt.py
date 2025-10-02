@@ -115,10 +115,11 @@ def prompt_container_user() -> Optional[str]:
             inquirer.Text(
                 "container_user",
                 message="Enter the PostgreSQL container user (e.g., 'postgres'):",
+                default="postgres",
             ),
         ]
         answers = inquirer.prompt(questions)
-        return answers["container_user"] if answers else "postgres"
+        return answers["container_user"] if answers else None
 
     except KeyboardInterrupt:
         print("\nCancelled by user")
