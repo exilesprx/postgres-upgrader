@@ -114,7 +114,7 @@ def prompt_container_user() -> Optional[str]:
         questions = [
             inquirer.Text(
                 "container_user",
-                message="Enter the PostgreSQL container user (e.g., 'postgres'):",
+                message="Enter the PostgreSQL container user",
                 default="postgres",
             ),
         ]
