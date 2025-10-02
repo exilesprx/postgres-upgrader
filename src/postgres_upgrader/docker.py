@@ -46,6 +46,7 @@ class DockerManager:
         4. Remove the old data volume
         5. Start the service with new PostgreSQL version
         6. Import data from the backup into the new database
+        7. Update collation version for the database
 
         Args:
             user: PostgreSQL username for authentication
@@ -74,6 +75,7 @@ class DockerManager:
         self.start_service_container()
         print(f"Importing data from backup into new database '{database}'...")
         self.import_data_from_backup(user, database, backup_path)
+        self.update_collation_version(user, database)
         print("Data import completed successfully.")
 
     def create_postgres_backup(self, user: str, database: str) -> str:
@@ -210,11 +212,50 @@ class DockerManager:
         container = self.find_container_by_service()
         cmd = ["psql", "-U", user, "-f", backup_path, database]
         exit_code, output = container.exec_run(cmd, user="postgres")
-
         if exit_code != 0:
             raise Exception(
                 f"Import failed with exit code {exit_code}: {output.decode('utf-8')}"
             )
+
+    def update_collation_version(self, user: str, database: str):
+        """
+        Update collation version for the PostgreSQL database after upgrade.
+
+        PostgreSQL major version upgrades may require updating collation versions
+        to ensure compatibility with the new version's locale and collation system.
+        This method refreshes the collation version for the specified database.
+
+        Args:
+            user: PostgreSQL username for authentication
+            database: PostgreSQL database name to update collation version for
+
+        Returns:
+            bool: Always returns False (legacy behavior)
+
+        Raises:
+            Exception: If container not found, collation update fails, or SQL execution error
+
+        Note:
+            This should typically be called after a PostgreSQL major version upgrade
+            to prevent collation-related warnings or errors.
+        """
+        container = self.find_container_by_service()
+        cmd = [
+            "psql",
+            "-U",
+            user,
+            "-d",
+            database,
+            "-Atc",
+            f"ALTER DATABASE {database} REFRESH COLLATION VERSION;",
+        ]
+        exit_code, output = container.exec_run(cmd, user="postgres")
+        if exit_code != 0:
+            raise Exception(
+                f"Collation update failed {exit_code}: {output.decode('utf-8')}"
+            )
+
+        return False
 
     def find_container_by_service(self):
         """Find the Docker container for the configured service."""
