@@ -166,6 +166,9 @@ def parse_docker_compose() -> DockerComposeConfig:
             "Docker Compose not found. Please ensure docker compose is installed."
         ) from e
 
+    if raw_data is None:
+        return DockerComposeConfig(services={})
+
     services = {}
     raw_services = raw_data.get("services", {})
     volume_mappings = raw_data.get("volumes", {})
