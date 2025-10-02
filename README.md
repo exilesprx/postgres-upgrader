@@ -9,7 +9,7 @@ A specialized tool for managing PostgreSQL upgrades in Docker Compose environmen
 - 🖥️ **No File Path Dependencies**: Works from any Docker Compose project directory
 - 📝 **Intuitive Interface**: Interactive prompts with arrow-key navigation
 - 🚀 **Automated Workflow**: Single method performs complete upgrade sequence
-- ✅ **Well-Tested**: Comprehensive test suite with 35 tests
+- ✅ **Well-Tested**: Comprehensive test suite with 52 tests
 
 ## Installation
 

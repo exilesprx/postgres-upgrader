@@ -3,6 +3,7 @@ Tests for Docker Compose parsing functionality.
 Tests the actual building blocks that the application uses.
 """
 
+import pytest
 from unittest.mock import patch
 from postgres_upgrader import (
     parse_docker_compose,
@@ -239,74 +240,372 @@ class TestVolumeValidation:
     def test_valid_volume_configuration(self):
         """Test that valid volume configuration passes validation."""
         from postgres_upgrader.compose_inspector import ServiceConfig
-        
+
         service = ServiceConfig(name="test")
         main_vol = VolumeMount(
-            name="database", 
-            path="/var/lib/postgresql/data", 
-            raw="database:/var/lib/postgresql/data"
+            name="database",
+            path="/var/lib/postgresql/data",
+            raw="database:/var/lib/postgresql/data",
         )
         backup_vol = VolumeMount(
-            name="backups", 
-            path="/var/lib/postgresql/backups", 
-            raw="backups:/var/lib/postgresql/backups"
+            name="backups",
+            path="/var/lib/postgresql/backups",
+            raw="backups:/var/lib/postgresql/backups",
         )
         service.select_volumes(main_vol, backup_vol)
-        
+
         assert service.is_configured_for_postgres_upgrade() is True
 
     def test_same_volume_configuration(self):
         """Test that same volume for main and backup fails validation."""
         from postgres_upgrader.compose_inspector import ServiceConfig
-        
+
         service = ServiceConfig(name="test")
         same_vol = VolumeMount(
-            name="database", 
-            path="/var/lib/postgresql/data", 
-            raw="database:/var/lib/postgresql/data"
+            name="database",
+            path="/var/lib/postgresql/data",
+            raw="database:/var/lib/postgresql/data",
         )
         service.select_volumes(same_vol, same_vol)
-        
+
         assert service.is_configured_for_postgres_upgrade() is False
 
     def test_nested_path_configuration(self):
         """Test that backup volume inside main volume fails validation."""
         from postgres_upgrader.compose_inspector import ServiceConfig
-        
+
         service = ServiceConfig(name="test")
         main_vol = VolumeMount(
-            name="database", 
-            path="/var/lib/postgresql/data", 
-            raw="database:/var/lib/postgresql/data"
+            name="database",
+            path="/var/lib/postgresql/data",
+            raw="database:/var/lib/postgresql/data",
         )
         backup_vol = VolumeMount(
-            name="backups", 
-            path="/var/lib/postgresql/data/backups", 
-            raw="backups:/var/lib/postgresql/data/backups"
+            name="backups",
+            path="/var/lib/postgresql/data/backups",
+            raw="backups:/var/lib/postgresql/data/backups",
         )
         service.select_volumes(main_vol, backup_vol)
-        
+
         assert service.is_configured_for_postgres_upgrade() is False
 
     def test_no_volumes_selected(self):
         """Test that no volumes selected fails validation."""
         from postgres_upgrader.compose_inspector import ServiceConfig
-        
+
         service = ServiceConfig(name="test")
-        
+
         assert service.is_configured_for_postgres_upgrade() is False
 
     def test_only_main_volume_selected(self):
         """Test that only main volume selected fails validation."""
         from postgres_upgrader.compose_inspector import ServiceConfig
-        
+
         service = ServiceConfig(name="test")
         main_vol = VolumeMount(
-            name="database", 
-            path="/var/lib/postgresql/data", 
-            raw="database:/var/lib/postgresql/data"
+            name="database",
+            path="/var/lib/postgresql/data",
+            raw="database:/var/lib/postgresql/data",
         )
         service.selected_main_volume = main_vol
         # Leave backup volume as None
-        
+
+        assert service.is_configured_for_postgres_upgrade() is False
+
+
+class TestVolumeValidationEdgeCases:
+    """Test advanced edge cases for volume validation."""
+
+    def test_backup_volume_is_postgres_data_directory(self):
+        """Test that using PostgreSQL data directory as backup raises exception."""
+        from postgres_upgrader.compose_inspector import ServiceConfig
+
+        service = ServiceConfig(name="test")
+        main_vol = VolumeMount(
+            name="database",
+            path="/var/lib/postgresql/custom",
+            raw="database:/var/lib/postgresql/custom",
+        )
+        backup_vol = VolumeMount(
+            name="backups",
+            path="/var/lib/postgresql/data",  # This is the dangerous path
+            raw="backups:/var/lib/postgresql/data",
+        )
+        service.select_volumes(main_vol, backup_vol)
+
+        # Should raise exception when trying to validate
+        with pytest.raises(
+            Exception,
+            match="You cannot use the default PostgreSQL data directory as a backup location",
+        ):
+            service.is_configured_for_postgres_upgrade()
+
+    def test_backup_volume_exact_match_main_volume_path(self):
+        """Test that backup volume with exact same path as main volume fails."""
+        from postgres_upgrader.compose_inspector import ServiceConfig
+
+        service = ServiceConfig(name="test")
+        main_vol = VolumeMount(
+            name="database", path="/custom/data", raw="database:/custom/data"
+        )
+        backup_vol = VolumeMount(
+            name="backups",
+            path="/custom/data",  # Exact same path, different volume name
+            raw="backups:/custom/data",
+        )
+        service.select_volumes(main_vol, backup_vol)
+
+        assert service.is_configured_for_postgres_upgrade() is False
+
+    def test_paths_with_trailing_slashes(self):
+        """Test volume validation handles trailing slashes correctly."""
+        from postgres_upgrader.compose_inspector import ServiceConfig
+
+        service = ServiceConfig(name="test")
+        main_vol = VolumeMount(
+            name="database",
+            path="/var/lib/postgresql/data/",
+            raw="database:/var/lib/postgresql/data/",
+        )
+        backup_vol = VolumeMount(
+            name="backups",
+            path="/var/lib/postgresql/backups/",
+            raw="backups:/var/lib/postgresql/backups/",
+        )
+        service.select_volumes(main_vol, backup_vol)
+
+        assert service.is_configured_for_postgres_upgrade() is True
+
+    def test_nested_path_with_trailing_slashes(self):
+        """Test nested path detection works with trailing slashes."""
+        from postgres_upgrader.compose_inspector import ServiceConfig
+
+        service = ServiceConfig(name="test")
+        main_vol = VolumeMount(
+            name="database",
+            path="/var/lib/postgresql/data/",
+            raw="database:/var/lib/postgresql/data/",
+        )
+        backup_vol = VolumeMount(
+            name="backups",
+            path="/var/lib/postgresql/data/backups/",
+            raw="backups:/var/lib/postgresql/data/backups/",
+        )
+        service.select_volumes(main_vol, backup_vol)
+
+        assert service.is_configured_for_postgres_upgrade() is False
+
+    def test_backup_volume_parent_of_main_volume(self):
+        """Test that backup volume as parent of main volume is allowed."""
+        from postgres_upgrader.compose_inspector import ServiceConfig
+
+        service = ServiceConfig(name="test")
+        main_vol = VolumeMount(
+            name="database",
+            path="/var/lib/postgresql/data/db",
+            raw="database:/var/lib/postgresql/data/db",
+        )
+        backup_vol = VolumeMount(
+            name="backups",
+            path="/var/lib/postgresql",
+            raw="backups:/var/lib/postgresql",
+        )
+        service.select_volumes(main_vol, backup_vol)
+
+        # Parent directory as backup should be valid (not nested inside main)
+        assert service.is_configured_for_postgres_upgrade() is True
+
+    def test_volumes_with_none_paths(self):
+        """Test volume validation handles None paths gracefully."""
+        from postgres_upgrader.compose_inspector import ServiceConfig
+
+        service = ServiceConfig(name="test")
+        main_vol = VolumeMount(name="database", path=None, raw="database")
+        backup_vol = VolumeMount(name="backups", path=None, raw="backups")
+        service.select_volumes(main_vol, backup_vol)
+
+        # None paths become empty strings, which are equal -> invalid
+        assert service.is_configured_for_postgres_upgrade() is False
+
+    def test_mixed_none_and_valid_paths(self):
+        """Test validation with one None path and one valid path."""
+        from postgres_upgrader.compose_inspector import ServiceConfig
+
+        service = ServiceConfig(name="test")
+        main_vol = VolumeMount(
+            name="database",
+            path="/var/lib/postgresql/data",
+            raw="database:/var/lib/postgresql/data",
+        )
+        backup_vol = VolumeMount(name="backups", path=None, raw="backups")
+        service.select_volumes(main_vol, backup_vol)
+
+        assert service.is_configured_for_postgres_upgrade() is True
+
+    def test_empty_string_paths(self):
+        """Test volume validation handles empty string paths."""
+        from postgres_upgrader.compose_inspector import ServiceConfig
+
+        service = ServiceConfig(name="test")
+        main_vol = VolumeMount(name="database", path="", raw="database")
+        backup_vol = VolumeMount(name="backups", path="", raw="backups")
+        service.select_volumes(main_vol, backup_vol)
+
+        # Empty paths are equal after normalization -> invalid
+        assert service.is_configured_for_postgres_upgrade() is False
+
+    def test_single_character_paths(self):
+        """Test volume validation with single character paths."""
+        from postgres_upgrader.compose_inspector import ServiceConfig
+
+        service = ServiceConfig(name="test")
+        main_vol = VolumeMount(name="database", path="/", raw="database:/")
+        backup_vol = VolumeMount(name="backups", path="/b", raw="backups:/b")
+        service.select_volumes(main_vol, backup_vol)
+
+        # Root path "/" becomes "" after rstrip, so "/b" starts with "" + "/" = "/" -> nested -> invalid
+        assert service.is_configured_for_postgres_upgrade() is False
+
+    def test_complex_nested_paths(self):
+        """Test complex nested path scenarios."""
+        from postgres_upgrader.compose_inspector import ServiceConfig
+
+        service = ServiceConfig(name="test")
+        main_vol = VolumeMount(
+            name="database",
+            path="/app/postgres/data",
+            raw="database:/app/postgres/data",
+        )
+        backup_vol = VolumeMount(
+            name="backups",
+            path="/app/postgres/data/subdir/backups",
+            raw="backups:/app/postgres/data/subdir/backups",
+        )
+        service.select_volumes(main_vol, backup_vol)
+
+        assert service.is_configured_for_postgres_upgrade() is False
+
+    def test_similar_but_not_nested_paths(self):
+        """Test paths that look similar but are not nested."""
+        from postgres_upgrader.compose_inspector import ServiceConfig
+
+        service = ServiceConfig(name="test")
+        main_vol = VolumeMount(
+            name="database",
+            path="/var/lib/postgresql/data",
+            raw="database:/var/lib/postgresql/data",
+        )
+        backup_vol = VolumeMount(
+            name="backups",
+            path="/var/lib/postgresql/data_backup",
+            raw="backups:/var/lib/postgresql/data_backup",
+        )
+        service.select_volumes(main_vol, backup_vol)
+
+        # data_backup is not nested inside data
+        assert service.is_configured_for_postgres_upgrade() is True
+
+    def test_unicode_paths(self):
+        """Test volume validation with Unicode characters in paths."""
+        from postgres_upgrader.compose_inspector import ServiceConfig
+
+        service = ServiceConfig(name="test")
+        main_vol = VolumeMount(
+            name="database",
+            path="/données/postgresql",
+            raw="database:/données/postgresql",
+        )
+        backup_vol = VolumeMount(
+            name="backups",
+            path="/sauvegarde/données",
+            raw="backups:/sauvegarde/données",
+        )
+        service.select_volumes(main_vol, backup_vol)
+
+        assert service.is_configured_for_postgres_upgrade() is True
+
+    def test_windows_style_paths(self):
+        """Test volume validation with Windows-style paths (for completeness)."""
+        from postgres_upgrader.compose_inspector import ServiceConfig
+
+        service = ServiceConfig(name="test")
+        main_vol = VolumeMount(
+            name="database",
+            path="C:\\data\\postgresql",
+            raw="database:C:\\data\\postgresql",
+        )
+        backup_vol = VolumeMount(
+            name="backups",
+            path="D:\\backups\\postgresql",
+            raw="backups:D:\\backups\\postgresql",
+        )
+        service.select_volumes(main_vol, backup_vol)
+
+        assert service.is_configured_for_postgres_upgrade() is True
+
+    def test_very_long_paths(self):
+        """Test volume validation with very long paths."""
+        from postgres_upgrader.compose_inspector import ServiceConfig
+
+        service = ServiceConfig(name="test")
+        long_path = "/very/long/path/that/goes/on/and/on/and/on/postgresql/data"
+        main_vol = VolumeMount(
+            name="database", path=long_path, raw=f"database:{long_path}"
+        )
+        backup_vol = VolumeMount(
+            name="backups",
+            path="/completely/different/very/long/backup/path/structure",
+            raw="backups:/completely/different/very/long/backup/path/structure",
+        )
+        service.select_volumes(main_vol, backup_vol)
+
+        assert service.is_configured_for_postgres_upgrade() is True
+
+    def test_root_filesystem_edge_case(self):
+        """Test edge case with root filesystem paths that should be valid."""
+        from postgres_upgrader.compose_inspector import ServiceConfig
+
+        service = ServiceConfig(name="test")
+        main_vol = VolumeMount(name="database", path="/data", raw="database:/data")
+        backup_vol = VolumeMount(name="backups", path="/backup", raw="backups:/backup")
+        service.select_volumes(main_vol, backup_vol)
+
+        # /data and /backup are siblings under root -> valid
+        assert service.is_configured_for_postgres_upgrade() is True
+
+    def test_path_normalization_edge_cases(self):
+        """Test that path normalization handles edge cases correctly."""
+        from postgres_upgrader.compose_inspector import ServiceConfig
+
+        service = ServiceConfig(name="test")
+        main_vol = VolumeMount(
+            name="database", path="/app/data////", raw="database:/app/data////"
+        )
+        backup_vol = VolumeMount(
+            name="backups", path="/app/backup///", raw="backups:/app/backup///"
+        )
+        service.select_volumes(main_vol, backup_vol)
+
+        # Multiple trailing slashes should be normalized correctly
+        assert service.is_configured_for_postgres_upgrade() is True
+
+    def test_volume_name_vs_path_different_logic(self):
+        """Test that volume name comparison and path comparison are handled separately."""
+        from postgres_upgrader.compose_inspector import ServiceConfig
+
+        service = ServiceConfig(name="test")
+        # Same name = invalid regardless of path
+        same_vol = VolumeMount(
+            name="database",
+            path="/var/lib/postgresql/data",
+            raw="database:/var/lib/postgresql/data",
+        )
+        different_path_same_name = VolumeMount(
+            name="database",  # Same name!
+            path="/completely/different/path",
+            raw="database:/completely/different/path",
+        )
+        service.select_volumes(same_vol, different_path_same_name)
+
+        # Should fail due to same volume name, not path
         assert service.is_configured_for_postgres_upgrade() is False
