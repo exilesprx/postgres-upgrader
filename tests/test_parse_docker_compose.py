@@ -52,41 +52,6 @@ volumes:
 """
 
 
-class TestParseDockerCompose:
-    """Test Docker Compose parsing using mocked docker compose config."""
-
-    @patch("postgres_upgrader.compose_inspector.subprocess.run")
-    def test_parse_docker_compose(self, mock_run):
-        """Test parsing Docker Compose using mocked docker compose config."""
-        # Mock the subprocess call to return our test data
-        mock_run.return_value.stdout = MOCK_DOCKER_COMPOSE_CONFIG
-        mock_run.return_value.returncode = 0
-
-        compose_data = parse_docker_compose()
-
-        assert isinstance(compose_data, DockerComposeConfig)
-        assert "postgres" in compose_data.services
-        assert "nginx" in compose_data.services
-
-
-class TestGetServices:
-    """Test service retrieval from parsed compose data."""
-
-    @patch("postgres_upgrader.compose_inspector.subprocess.run")
-    def test_get_services(self, mock_run):
-        """Test getting services from parsed compose data."""
-        # Mock the subprocess call
-        mock_run.return_value.stdout = MOCK_DOCKER_COMPOSE_CONFIG
-        mock_run.return_value.returncode = 0
-
-        compose_data = parse_docker_compose()
-        services = compose_data.services
-
-        assert isinstance(services, dict)
-        assert "postgres" in services
-        assert "nginx" in services
-
-
 class TestGetVolumes:
     """Test volume extraction for specific services."""
 

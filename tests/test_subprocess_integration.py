@@ -477,4 +477,3 @@ volumes: {}
             # Should handle large configurations
             config = parse_docker_compose()
             assert len(config.services) == 50
-
