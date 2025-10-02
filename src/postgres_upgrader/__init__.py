@@ -8,7 +8,7 @@ from .compose_inspector import (
     ServiceConfig,
     VolumeMount,
 )
-from .prompt import prompt_user_choice, identify_service_volumes
+from .prompt import prompt_user_choice, identify_service_volumes, prompt_container_user
 from .docker import DockerManager
 
 __all__ = [
@@ -20,6 +20,7 @@ __all__ = [
     # User interaction functions
     "prompt_user_choice",
     "identify_service_volumes",
+    "prompt_container_user",
     # Docker operations
     "DockerManager",
 ]

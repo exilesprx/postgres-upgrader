@@ -9,6 +9,7 @@ from postgres_upgrader import (
     identify_service_volumes,
     DockerManager,
     parse_docker_compose,
+    prompt_container_user,
 )
 
 if TYPE_CHECKING:
@@ -63,9 +64,16 @@ def main() -> None:
         )
         sys.exit(1)
 
+    container_user = prompt_container_user()
+    if not container_user:
+        print("A valid container user is required to proceed.")
+        sys.exit(1)
+
     try:
-        with DockerManager(selected_service) as docker_mgr:
-            docker_mgr.perform_postgres_upgrade(user, database)
+        with DockerManager(
+            selected_service, container_user, user, database
+        ) as docker_mgr:
+            docker_mgr.perform_postgres_upgrade()
     except Exception as e:
         print(f"Error: {e}")
         sys.exit(1)

@@ -98,3 +98,28 @@ def identify_service_volumes(
     # Set the selected volumes on the service and return it
     service.select_volumes(main_volume, backup_volume)
     return service
+
+
+def prompt_container_user() -> Optional[str]:
+    """
+    Prompt user to input a container user (e.g., 'postgres').
+
+    Args:
+        message: Prompt message to display
+
+    Returns:
+        User input string, or None if cancelled
+    """
+    try:
+        questions = [
+            inquirer.Text(
+                "container_user",
+                message="Enter the PostgreSQL container user (e.g., 'postgres'):",
+            ),
+        ]
+        answers = inquirer.prompt(questions)
+        return answers["container_user"] if answers else "postgres"
+
+    except KeyboardInterrupt:
+        print("\nCancelled by user")
+        return None

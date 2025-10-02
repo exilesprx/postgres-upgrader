@@ -23,9 +23,18 @@ class DockerManager:
             docker_mgr.perform_postgres_upgrade(user, database)
     """
 
-    def __init__(self, service_config: "ServiceConfig"):
+    def __init__(
+        self,
+        service_config: "ServiceConfig",
+        container_user: str,
+        database_user: str,
+        database_name: str,
+    ):
         self.client: Optional[docker.DockerClient] = None
         self.service_config = service_config
+        self.container_user = container_user
+        self.database_user = database_user
+        self.database_name = database_name
 
     def __enter__(self) -> "DockerManager":
         self.client = docker.from_env()
@@ -35,7 +44,7 @@ class DockerManager:
         if self.client:
             self.client.close()
 
-    def perform_postgres_upgrade(self, user: str, database: str):
+    def perform_postgres_upgrade(self):
         """
         Perform a complete PostgreSQL upgrade workflow.
 
@@ -47,10 +56,6 @@ class DockerManager:
         5. Start the service with new PostgreSQL version
         6. Import data from the backup into the new database
         7. Update collation version for the database
-
-        Args:
-            user: PostgreSQL username for authentication
-            database: PostgreSQL database name to backup
 
         Returns:
             str: Path to the created backup file (container path)
@@ -65,29 +70,27 @@ class DockerManager:
         if not self.service_config.is_configured_for_postgres_upgrade():
             raise Exception("Service must have selected volumes for PostgreSQL upgrade")
 
-        print(f"Creating backup of database '{database}' for user '{user}'...")
-        backup_path = self.create_postgres_backup(user, database)
+        print(
+            f"Creating backup of database '{self.database_name}' for user '{self.database_user}'..."
+        )
+        backup_path = self.create_postgres_backup()
         print(f"Backup created successfully: {backup_path}")
         self.stop_service_container()
         self.update_service_container()
         self.build_service_container()
         self.remove_service_main_volume()
         self.start_service_container()
-        print(f"Importing data from backup into new database '{database}'...")
-        self.import_data_from_backup(user, database, backup_path)
-        self.update_collation_version(user, database)
+        print(f"Importing data from backup into new database '{self.database_name}'...")
+        self.import_data_from_backup(backup_path)
+        self.update_collation_version()
         print("Data import completed successfully.")
 
-    def create_postgres_backup(self, user: str, database: str) -> str:
+    def create_postgres_backup(self) -> str:
         """
         Export PostgreSQL data from a Docker container to a backup file.
 
         Uses the configured service and backup volume to create a timestamped
         SQL dump of the specified PostgreSQL database.
-
-        Args:
-            user: PostgreSQL username for authentication
-            database: PostgreSQL database name to backup
 
         Returns:
             str: Path to the created backup file (container path)
@@ -115,8 +118,15 @@ class DockerManager:
         backup_path = f"{backup_dir}/{backup_filename}"
 
         container = self.find_container_by_service()
-        cmd = ["pg_dump", "-U", user, "-f", backup_path, database]
-        exit_code, output = container.exec_run(cmd, user="postgres")
+        cmd = [
+            "pg_dump",
+            "-U",
+            self.database_user,
+            "-f",
+            backup_path,
+            self.database_name,
+        ]
+        exit_code, output = container.exec_run(cmd, user=self.container_user)
 
         if exit_code != 0:
             raise Exception(
@@ -175,7 +185,7 @@ class DockerManager:
         except subprocess.CalledProcessError as e:
             raise Exception(f"Failed to restart service {service_name}: {e}")
 
-    def import_data_from_backup(self, user: str, database: str, backup_path: str):
+    def import_data_from_backup(self, backup_path: str):
         """
         Import PostgreSQL data from a backup file into the database.
 
@@ -183,8 +193,6 @@ class DockerManager:
         into the specified PostgreSQL database running in a Docker container.
 
         Args:
-            user: PostgreSQL username for authentication
-            database: PostgreSQL database name to restore data into
             backup_path: Container path to the SQL backup file to import
 
         Returns:
@@ -210,24 +218,20 @@ class DockerManager:
             raise Exception("Container is not healthy after restart")
 
         container = self.find_container_by_service()
-        cmd = ["psql", "-U", user, "-f", backup_path, database]
-        exit_code, output = container.exec_run(cmd, user="postgres")
+        cmd = ["psql", "-U", self.database_user, "-f", backup_path, self.database_name]
+        exit_code, output = container.exec_run(cmd, user=self.container_user)
         if exit_code != 0:
             raise Exception(
                 f"Import failed with exit code {exit_code}: {output.decode('utf-8')}"
             )
 
-    def update_collation_version(self, user: str, database: str):
+    def update_collation_version(self):
         """
         Update collation version for the PostgreSQL database after upgrade.
 
         PostgreSQL major version upgrades may require updating collation versions
         to ensure compatibility with the new version's locale and collation system.
         This method refreshes the collation version for the specified database.
-
-        Args:
-            user: PostgreSQL username for authentication
-            database: PostgreSQL database name to update collation version for
 
         Returns:
             bool: Always returns False (legacy behavior)
@@ -243,13 +247,13 @@ class DockerManager:
         cmd = [
             "psql",
             "-U",
-            user,
+            self.database_user,
             "-d",
-            database,
+            self.database_name,
             "-Atc",
-            f"ALTER DATABASE {database} REFRESH COLLATION VERSION;",
+            f"ALTER DATABASE {self.database_name} REFRESH COLLATION VERSION;",
         ]
-        exit_code, output = container.exec_run(cmd, user="postgres")
+        exit_code, output = container.exec_run(cmd, user=self.container_user)
         if exit_code != 0:
             raise Exception(
                 f"Collation update failed {exit_code}: {output.decode('utf-8')}"
@@ -291,7 +295,9 @@ class DockerManager:
                 break
             elif tries >= timeout / sleep and status != "healthy":
                 # If health check fails, try a simple pg_isready as fallback
-                exit_code, _ = container.exec_run("pg_isready", user="postgres")
+                exit_code, _ = container.exec_run(
+                    "pg_isready", user=self.container_user
+                )
                 if exit_code == 0:
                     break
                 return False
