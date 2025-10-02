@@ -70,14 +70,12 @@ class DockerManager:
         if not backup_dir:
             raise Exception("Backup directory not found in configuration")
 
-        container = self.find_container_by_service()
         date = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_filename = f"backup-{date}.sql"
         backup_path = f"{backup_dir}/{backup_filename}"
 
+        container = self.find_container_by_service()
         cmd = ["pg_dump", "-U", user, "-f", backup_path, database]
-
-        print(f"Creating backup of database '{database}' for user '{user}'...")
         exit_code, output = container.exec_run(cmd, user="postgres")
 
         if exit_code != 0:
@@ -85,10 +83,9 @@ class DockerManager:
                 f"pg_dump failed with exit code {exit_code}: {output.decode('utf-8')}"
             )
 
-        print(f"Backup created successfully: {backup_path}")
         return backup_path
 
-    def perform_postgres_upgrade(self, user: str, database: str) -> str:
+    def perform_postgres_upgrade(self, user: str, database: str):
         """
         Perform a complete PostgreSQL upgrade workflow.
 
@@ -116,14 +113,14 @@ class DockerManager:
         if not self.service_config.is_configured_for_postgres_upgrade():
             raise Exception("Service must have selected volumes for PostgreSQL upgrade")
 
+        print(f"Creating backup of database '{database}' for user '{user}'...")
         backup_path = self.create_postgres_backup(user, database)
+        print(f"Backup created successfully: {backup_path}")
         self.stop_service_container()
         self.update_service_container()
         self.build_service_container()
         self.remove_service_main_volume()
         self.start_service_container()
-
-        return backup_path
 
     def stop_service_container(self):
         """Stop and remove the configured service container."""
