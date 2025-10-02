@@ -15,3 +15,6 @@ docker-compose.*.yml
 
 # Env file for testing
 .env
+
+# Sql file for testing
+example.sql

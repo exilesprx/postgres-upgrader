@@ -25,4 +25,4 @@ docker exec -i new_postgres_container psql -U postgres \
   < /var/lib/postgresql/backups/backup-{date}.sql
 
 # Alter collections version
-ALTER DATABASE keycloak REFRESH COLLATION VERSION
+docker compose exec postgres /bin/bash -c "psql -U tester -d testing -Atc \"ALTER DATABASE testing REFRESH COLLATION VERSION;\""
