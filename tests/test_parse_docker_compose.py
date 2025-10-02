@@ -3,19 +3,64 @@ Tests for Docker Compose parsing functionality.
 Tests the actual building blocks that the application uses.
 """
 
-import pytest
+from unittest.mock import patch
 from postgres_upgrader import (
     parse_docker_compose,
     DockerComposeConfig,
 )
 from postgres_upgrader.compose_inspector import VolumeMount
 
+# Mock docker compose config output
+MOCK_DOCKER_COMPOSE_CONFIG = """
+name: postgres-updater
+services:
+  nginx:
+    image: nginx:latest
+    networks:
+      default: null
+    ports:
+    - mode: ingress
+      target: 8000
+      published: "80"
+      protocol: tcp
+  postgres:
+    environment:
+      POSTGRES_DB: testing
+      POSTGRES_PASSWORD: testing
+      POSTGRES_USER: tester
+    image: postgres:17.0
+    networks:
+      default: null
+    volumes:
+    - type: volume
+      source: database
+      target: /var/lib/postgresql/data
+      volume: {}
+    - type: volume
+      source: backups
+      target: /var/lib/postgresql/backups
+      volume: {}
+networks:
+  default:
+    name: postgres-updater_default
+volumes:
+  backups:
+    name: postgres-updater_backups
+  database:
+    name: postgres-updater_database
+"""
+
 
 class TestParseDockerCompose:
-    """Test Docker Compose parsing using real docker compose config."""
+    """Test Docker Compose parsing using mocked docker compose config."""
 
-    def test_parse_docker_compose(self):
-        """Test parsing Docker Compose using docker compose config."""
+    @patch("postgres_upgrader.compose_inspector.subprocess.run")
+    def test_parse_docker_compose(self, mock_run):
+        """Test parsing Docker Compose using mocked docker compose config."""
+        # Mock the subprocess call to return our test data
+        mock_run.return_value.stdout = MOCK_DOCKER_COMPOSE_CONFIG
+        mock_run.return_value.returncode = 0
+
         compose_data = parse_docker_compose()
 
         assert isinstance(compose_data, DockerComposeConfig)
@@ -23,35 +68,16 @@ class TestParseDockerCompose:
         assert "nginx" in compose_data.services
 
 
-import tempfile
-import os
-import pytest
-from postgres_upgrader import (
-    parse_docker_compose,
-    DockerComposeConfig,
-)
-from postgres_upgrader.compose_inspector import VolumeMount
-
-
-class TestParseDockerCompose:
-    """Test Docker Compose YAML parsing."""
-
-    def test_parse_docker_compose(self):
-        """Test that Docker Compose config is parsed correctly."""
-        result = parse_docker_compose()
-
-        assert isinstance(result, DockerComposeConfig)
-        assert "postgres" in result.services
-        assert "nginx" in result.services
-        assert result.services["postgres"].name == "postgres"
-        assert result.services["nginx"].name == "nginx"
-
-
 class TestGetServices:
     """Test service retrieval from parsed compose data."""
 
-    def test_get_services(self):
+    @patch("postgres_upgrader.compose_inspector.subprocess.run")
+    def test_get_services(self, mock_run):
         """Test getting services from parsed compose data."""
+        # Mock the subprocess call
+        mock_run.return_value.stdout = MOCK_DOCKER_COMPOSE_CONFIG
+        mock_run.return_value.returncode = 0
+
         compose_data = parse_docker_compose()
         services = compose_data.services
 
@@ -63,8 +89,13 @@ class TestGetServices:
 class TestGetVolumes:
     """Test volume extraction for specific services."""
 
-    def test_get_volumes_postgres(self):
+    @patch("postgres_upgrader.compose_inspector.subprocess.run")
+    def test_get_volumes_postgres(self, mock_run):
         """Test getting volumes for postgres service."""
+        # Mock the subprocess call
+        mock_run.return_value.stdout = MOCK_DOCKER_COMPOSE_CONFIG
+        mock_run.return_value.returncode = 0
+
         compose_data = parse_docker_compose()
         volumes = compose_data.get_volumes("postgres")
 
@@ -75,17 +106,27 @@ class TestGetVolumes:
         assert "database:/var/lib/postgresql/data" in volume_raws
         assert "backups:/var/lib/postgresql/backups" in volume_raws
 
-    def test_get_volumes_nginx(self):
+    @patch("postgres_upgrader.compose_inspector.subprocess.run")
+    def test_get_volumes_nginx(self, mock_run):
         """Test getting volumes for nginx service."""
+        # Mock the subprocess call
+        mock_run.return_value.stdout = MOCK_DOCKER_COMPOSE_CONFIG
+        mock_run.return_value.returncode = 0
+
         compose_data = parse_docker_compose()
         volumes = compose_data.get_volumes("nginx")
 
         assert isinstance(volumes, list)
-        # Nginx service has no volumes in the real docker-compose.yml
+        # Nginx service has no volumes in the mocked docker-compose.yml
         assert len(volumes) == 0
 
-    def test_get_volumes_nonexistent_service(self):
+    @patch("postgres_upgrader.compose_inspector.subprocess.run")
+    def test_get_volumes_nonexistent_service(self, mock_run):
         """Test getting volumes for non-existent service."""
+        # Mock the subprocess call
+        mock_run.return_value.stdout = MOCK_DOCKER_COMPOSE_CONFIG
+        mock_run.return_value.returncode = 0
+
         compose_data = parse_docker_compose()
         volumes = compose_data.get_volumes("nonexistent")
 
