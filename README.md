@@ -10,7 +10,8 @@ A specialized tool for managing PostgreSQL upgrades in Docker Compose environmen
 - 📝 **Intuitive Interface**: Interactive prompts with arrow-key navigation
 - 🚀 **Automated Workflow**: Single method performs complete upgrade sequence
 - 🛡️ **Data Verification**: Pre-backup validation and post-import verification to ensure data integrity
-- ✅ **Well-Tested**: Comprehensive test suite covering error handling, edge cases, and integration scenarios
+- 🔧 **Volume Verification**: Robust backup volume mounting verification with retry logic and container restart fallback
+- ✅ **Well-Tested**: Comprehensive test suite covering error handling, edge cases, integration scenarios, and volume verification
 
 ## Installation
 
@@ -81,6 +82,7 @@ The tool will:
 5. Perform complete PostgreSQL upgrade workflow with data verification:
    - Create backup and verify integrity
    - Stop, update, rebuild, and restart PostgreSQL service
+   - Verify backup volume is properly mounted
    - Import data and verify successful restoration
 
 ### Example Output
@@ -218,7 +220,9 @@ from postgres_upgrader import (
     DockerManager,
     prompt_container_user,
 )
+from rich.console import Console
 
+console = Console()
 compose_data = parse_docker_compose()
 selected_service = identify_service_volumes(compose_data)
 
@@ -234,8 +238,8 @@ if selected_service:
 
     # Perform complete upgrade workflow
     with DockerManager(selected_service, container_user, user, database) as docker_mgr:
-        backup_path = docker_mgr.perform_postgres_upgrade()
-        print(f"Upgrade completed! Backup: {backup_path}")
+        docker_mgr.perform_postgres_upgrade(console)
+        print("Upgrade completed successfully!")
 ```
 
 ## Development
@@ -285,11 +289,13 @@ postgres-upgrader/
 │   ├── compose_inspector.py       # Docker Compose config parsing via subprocess
 │   ├── prompt.py                  # User interaction and volume selection
 │   ├── docker.py                  # Docker operations and PostgreSQL backup
+│   ├── postgres.py                # Main upgrade workflow logic
 │   └── env.py                     # Environment configuration management
 ├── tests/                         # Test suite
-│   ├── test_docker.py              # Docker operations tests
+│   ├── test_docker.py              # Docker operations tests (including volume verification)
 │   ├── test_parse_docker_compose.py  # Config resolution tests
-│   └── test_user_choice.py          # User interaction tests
+│   ├── test_subprocess_integration.py # Docker Compose subprocess integration tests
+│   └── test_user_interaction.py    # User interaction tests
 ├── main.py                        # CLI entry point
 ├── pyproject.toml                 # Project configuration
 ├── uv.lock                        # Dependency lock file (uv)
@@ -302,18 +308,22 @@ postgres-upgrader/
 - Docker Compose v2+ (accessible via `docker compose config` command)
 - PostgreSQL credentials either in `.env` file or Docker Compose environment variables
 - A Docker Compose project with `docker-compose.yml` file
-- Dependencies: `pyyaml`, `inquirer`, `docker`
+- Dependencies: `pyyaml`, `inquirer`, `docker`, `rich`
 - Dev Dependencies: `pytest`, `ruff`
 
-## Future Enhancements
+## Features Implemented
 
-This tool is designed as the foundation for a complete PostgreSQL upgrade solution that will include:
+This tool provides a complete PostgreSQL upgrade solution including:
 
-- 🔄 Automated backup creation before upgrades
-- 🐳 Docker image building for new PostgreSQL versions
-- ⚡ Service orchestration (stop/start PostgreSQL containers)
-- 📥 Backup import and restoration
-- 🔧 Complete upgrade workflow automation
+- 🔄 **Automated backup creation** with integrity verification before upgrades
+- 🐳 **Docker image management** for new PostgreSQL versions (pull and build)
+- ⚡ **Service orchestration** - complete stop/start PostgreSQL container lifecycle
+- 📥 **Backup import and restoration** with comprehensive verification
+- 🔧 **Complete upgrade workflow automation** - single command handles entire process
+- 🛡️ **Data integrity verification** - pre-backup and post-import validation
+- 🔧 **Volume mounting verification** with retry logic and automatic container restart
+- 📊 **Database statistics collection** for upgrade verification
+- 🎨 **Rich terminal output** with colored progress indicators and status messages
 
 ## Contributing
 

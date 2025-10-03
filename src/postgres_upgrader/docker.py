@@ -49,7 +49,7 @@ class DockerManager:
         if self.client:
             self.client.close()
 
-    def perform_postgres_upgrade(self):
+    def perform_postgres_upgrade(self, console: Console):
         """
         Perform a complete PostgreSQL upgrade workflow with verification.
 
@@ -61,9 +61,13 @@ class DockerManager:
         5. Update and build the service with new PostgreSQL version
         6. Remove the old data volume
         7. Start the service with new PostgreSQL version
-        8. Import data from the backup into the new database
-        9. Verify import success
-        10. Update collation version for the database
+        8. Verify backup volume is mounted
+        9. Import data from the backup into the new database
+        10. Verify import success
+        11. Update collation version for the database
+
+        Args:
+            console: Rich Console instance for formatted user output
 
         Raises:
             Exception: If any step fails or required config is missing
@@ -74,8 +78,6 @@ class DockerManager:
         """
         if not self.service_config.is_configured_for_postgres_upgrade():
             raise Exception("Service must have selected volumes for PostgreSQL upgrade")
-
-        console = Console()
 
         console.print("  Collecting database statistics...")
         original_stats = self.get_database_statistics()
@@ -638,6 +640,15 @@ class DockerManager:
         }
 
     def display_verification_results(self, console: Console, data: dict):
+        """
+        Display verification results to the user in a formatted manner.
+
+        Args:
+            console: Rich Console instance for formatted output
+            data: Verification results dictionary from verify_import_success()
+                 Expected keys: success, warnings, tables_restored,
+                 estimated_rows, database_size
+        """
         if not data["success"]:
             for warning in data["warnings"]:
                 console.print(f"     WARNING: {warning}", style="red")
