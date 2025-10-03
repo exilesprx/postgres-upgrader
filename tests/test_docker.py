@@ -445,14 +445,26 @@ class TestDockerManagerIntegration:
             mock_container.name = "test_postgres"
             mock_client.containers.list.return_value = [mock_container]
 
-            # Mock successful command executions in sequence with enough responses
+            # Mock successful command executions in sequence for verification workflow
             mock_container.exec_run.side_effect = [
-                (0, b"Backup created successfully"),  # create_postgres_backup
-                (0, b"Data imported successfully"),  # import_data_from_backup
-                (0, b"Collation version updated"),  # update_collation_version
-                (0, b"Extra response 1"),  # Additional calls
-                (0, b"Extra response 2"),  # Additional calls
-                (0, b"Extra response 3"),  # Additional calls
+                # get_database_statistics calls (original stats)
+                (0, b"5"),  # table count query
+                (0, b"1000"),  # row count estimate
+                (0, b"25 MB"),  # database size
+                # create_postgres_backup call
+                (0, b"Backup created successfully"),
+                # verify_backup_integrity calls
+                (0, b"12345"),  # file size check
+                (0, b"-- PostgreSQL database dump\n-- Version info"),  # header check
+                (0, b"5"),  # table count in backup
+                # import_data_from_backup call
+                (0, b"Data imported successfully"),
+                # get_database_statistics calls (post-import stats)
+                (0, b"5"),  # table count query (same as original)
+                (0, b"1000"),  # row count estimate (same as original)
+                (0, b"25 MB"),  # database size (same as original)
+                # update_collation_version call
+                (0, b"Collation version updated"),
             ]
 
             with DockerManager(
@@ -462,20 +474,20 @@ class TestDockerManagerIntegration:
                 with patch.object(
                     docker_mgr, "check_container_status", return_value=True
                 ):
-                    # Note: perform_postgres_upgrade() currently returns None (no return statement)
-                    # This test verifies the workflow completes without error
+                    # Updated method now returns backup path
                     result = docker_mgr.perform_postgres_upgrade()
 
-                    # Current implementation doesn't return backup path (could be improved)
-                    assert result is None  # Current behavior
+                    # Verify backup path is returned
+                    assert result is not None
+                    assert "/var/lib/postgresql/backups/backup-" in result
 
                     # Verify Docker commands were called
                     assert (
                         mock_subprocess.call_count >= 2
                     )  # At least stop and volume operations
 
-                    # Verify container operations
-                    assert mock_container.exec_run.call_count >= 3
+                    # Verify container operations (now includes verification calls)
+                    assert mock_container.exec_run.call_count >= 10
 
     def test_backup_and_import_workflow(self):
         """Test backup creation followed by data import."""

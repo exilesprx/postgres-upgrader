@@ -9,6 +9,7 @@ A specialized tool for managing PostgreSQL upgrades in Docker Compose environmen
 - 🖥️ **No File Path Dependencies**: Works from any Docker Compose project directory
 - 📝 **Intuitive Interface**: Interactive prompts with arrow-key navigation
 - 🚀 **Automated Workflow**: Single method performs complete upgrade sequence
+- 🛡️ **Data Verification**: Pre-backup validation and post-import verification to ensure data integrity
 - ✅ **Well-Tested**: Comprehensive test suite covering error handling, edge cases, and integration scenarios
 
 ## Installation
@@ -76,7 +77,11 @@ The tool will:
 1. Analyze your Docker Compose configuration using `docker compose config`
 2. Interactively prompt you to select a service and volumes
 3. Access resolved environment variables for credentials
-4. Perform complete PostgreSQL upgrade workflow (backup, stop, update, rebuild, restart)
+4. Collect baseline database statistics for verification
+5. Perform complete PostgreSQL upgrade workflow with data verification:
+   - Create backup and verify integrity
+   - Stop, update, rebuild, and restart PostgreSQL service
+   - Import data and verify successful restoration
 
 ### Example Output
 
@@ -92,12 +97,14 @@ The tool will:
 [?] Select the backup volume::
  > backups:/var/lib/postgresql/backups
 
-Backup location: /var/lib/postgresql/backups
-Creating backup of database 'testing' for user 'tester'...
+📊 Collecting database statistics...
+   Current database: 5 tables, 25 MB
+💾 Creating backup of database 'testing' for user 'tester'...
 Backup created successfully: /var/lib/postgresql/backups/backup-20251001_165130.sql
+🔍 Verifying backup integrity...
+   Backup verified: 12345 bytes, ~5 tables
 [+] Stopping 1/1
  ✔ Container postgres-updater-postgres-1  Stopped                                                                           0.4s
-? Going to remove postgres-updater-postgres-1 Yes
 [+] Removing 1/0
  ✔ Container postgres-updater-postgres-1  Removed                                                                           0.0s
 [+] Pulling 1/1
@@ -108,6 +115,13 @@ Restarting service container...
 [+] Running 2/2
  ✔ Volume "postgres-updater_database"     Created                                                                           0.0s
  ✔ Container postgres-updater-postgres-1  Started                                                                           0.2s
+📥 Importing data from backup into new database 'testing'...
+✅ Verifying import success...
+   ✅ Import verification successful:
+      Tables: 5 (original: 5)
+      Estimated rows: 1000
+      Database size: 25 MB
+🎉 PostgreSQL upgrade completed successfully!
 ```
 
 ## How It Works
