@@ -1,5 +1,6 @@
 import docker
 import time
+from rich.console import Console
 import subprocess
 from datetime import datetime
 from typing import Optional, TYPE_CHECKING
@@ -77,23 +78,26 @@ class DockerManager:
         if not self.service_config.is_configured_for_postgres_upgrade():
             raise Exception("Service must have selected volumes for PostgreSQL upgrade")
 
-        print("  Collecting database statistics...")
+        console = Console()
+
+        console.print("  Collecting database statistics...")
         original_stats = self.get_database_statistics()
-        print(
+        console.print(
             f"   Current database: {original_stats['table_count']} tables, {original_stats['database_size']}"
         )
 
-        print(
+        console.print(
             f"  Creating backup of database '{self.database_name}' for user '{self.database_user}'..."
         )
         backup_path = self.create_postgres_backup()
-        print(f"Backup created successfully: {backup_path}")
+        console.print(f"Backup created successfully: {backup_path}")
 
         # Verify backup integrity before proceeding
-        print("  Verifying backup integrity...")
+        console.print("  Verifying backup integrity...")
         backup_stats = self.verify_backup_integrity(backup_path)
-        print(
-            f"   Backup verified: {backup_stats['file_size_bytes']} bytes, ~{backup_stats['estimated_table_count']} tables"
+        console.print(
+            f"   Backup verified: {backup_stats['file_size_bytes']} bytes, ~{backup_stats['estimated_table_count']} tables",
+            style="green",
         )
 
         self.stop_service_container()
@@ -104,7 +108,7 @@ class DockerManager:
         container = self.start_service_container()
         self.verify_backup_volume_mounted(container=container)
 
-        print(
+        console.print(
             f"  Importing data from backup into new database '{self.database_name}'..."
         )
         self.import_data_from_backup(backup_path)
@@ -113,20 +117,20 @@ class DockerManager:
 
         if not verification_result["success"]:
             for warning in verification_result["warnings"]:
-                print(f"     WARNING: {warning}")
+                console.print(f"     WARNING: {warning}", style="red")
             raise Exception(
                 "Import verification failed - data may not have been restored correctly"
             )
 
-        print("     Import verification successful:")
-        print(
+        console.print("     Import verification successful:")
+        console.print(
             f"      Tables: {verification_result['tables_restored']} (original: {verification_result['original_tables']})"
         )
-        print(f"      Estimated rows: {verification_result['estimated_rows']}")
-        print(f"      Database size: {verification_result['database_size']}")
+        console.print(f"      Estimated rows: {verification_result['estimated_rows']}")
+        console.print(f"      Database size: {verification_result['database_size']}")
 
         self.update_collation_version()
-        print("  PostgreSQL upgrade completed successfully!")
+        console.print("  PostgreSQL upgrade completed successfully!", style="bold green")
 
         return backup_path
 
