@@ -486,12 +486,18 @@ class TestDockerManagerIntegration:
                 with patch.object(
                     docker_mgr, "check_container_status", return_value=True
                 ):
+                    # Mock console to avoid actual output during tests
+                    mock_console = MagicMock()
+
                     try:
-                        docker_mgr.perform_postgres_upgrade()
+                        docker_mgr.perform_postgres_upgrade(mock_console)
                     except Exception as e:
                         pytest.fail(
                             f"perform_postgres_upgrade raised an exception: {e}"
                         )
+
+                    # Verify console.print was called (shows progress messages)
+                    assert mock_console.print.call_count > 0
 
                     # Verify Docker commands were called
                     assert (

@@ -681,4 +681,3 @@ class TestPromptErrorHandling:
                 mock_print.assert_called_with(
                     "No volumes found for service 'postgres'."
                 )
-
