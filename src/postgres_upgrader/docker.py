@@ -655,6 +655,8 @@ class DockerManager:
             return
 
         console.print("     Import verification successful:")
-        console.print(f"      Tables: {data['tables_restored']} (original: {data})")
+        console.print(
+            f"      Tables: {data['tables_restored']} (original: {data['original_tables']})"
+        )
         console.print(f"      Estimated rows: {data['estimated_rows']}")
         console.print(f"      Database size: {data['database_size']}")
