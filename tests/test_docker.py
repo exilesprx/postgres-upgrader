@@ -486,12 +486,12 @@ class TestDockerManagerIntegration:
                 with patch.object(
                     docker_mgr, "check_container_status", return_value=True
                 ):
-                    # Updated method now returns backup path
-                    result = docker_mgr.perform_postgres_upgrade()
-
-                    # Verify backup path is returned
-                    assert result is not None
-                    assert "/var/lib/postgresql/backups/backup-" in result
+                    try:
+                        docker_mgr.perform_postgres_upgrade()
+                    except Exception as e:
+                        pytest.fail(
+                            f"perform_postgres_upgrade raised an exception: {e}"
+                        )
 
                     # Verify Docker commands were called
                     assert (

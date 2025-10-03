@@ -65,9 +65,6 @@ class DockerManager:
         9. Verify import success
         10. Update collation version for the database
 
-        Returns:
-            str: Path to the created backup file (container path)
-
         Raises:
             Exception: If any step fails or required config is missing
 
@@ -106,6 +103,8 @@ class DockerManager:
         self.build_service_container()
         self.remove_service_main_volume()
         container = self.start_service_container()
+
+        console.print("  Verifying backup volume is mounted...")
         self.verify_backup_volume_mounted(container=container)
 
         console.print(
@@ -114,25 +113,18 @@ class DockerManager:
         self.import_data_from_backup(backup_path)
 
         verification_result = self.verify_import_success(original_stats, backup_stats)
-
-        if not verification_result["success"]:
-            for warning in verification_result["warnings"]:
-                console.print(f"     WARNING: {warning}", style="red")
-            raise Exception(
-                "Import verification failed - data may not have been restored correctly"
+        self.display_verification_results(console, verification_result)
+        if verification_result["success"] is False:
+            console.print(
+                "Import verification failed - data may not have been restored correctly",
+                style="bold red",
             )
-
-        console.print("     Import verification successful:")
-        console.print(
-            f"      Tables: {verification_result['tables_restored']} (original: {verification_result['original_tables']})"
-        )
-        console.print(f"      Estimated rows: {verification_result['estimated_rows']}")
-        console.print(f"      Database size: {verification_result['database_size']}")
+            raise Exception("PostgreSQL upgrade verification failed. Please review.")
 
         self.update_collation_version()
-        console.print("  PostgreSQL upgrade completed successfully!", style="bold green")
-
-        return backup_path
+        console.print(
+            "  PostgreSQL upgrade completed successfully!", style="bold green"
+        )
 
     def create_postgres_backup(self) -> str:
         """
@@ -644,3 +636,14 @@ class DockerManager:
             "estimated_rows": current_stats["estimated_total_rows"],
             "database_size": current_stats["database_size"],
         }
+
+    def display_verification_results(self, console: Console, data: dict):
+        if not data["success"]:
+            for warning in data["warnings"]:
+                console.print(f"     WARNING: {warning}", style="red")
+            return
+
+        console.print("     Import verification successful:")
+        console.print(f"      Tables: {data['tables_restored']} (original: {data})")
+        console.print(f"      Estimated rows: {data['estimated_rows']}")
+        console.print(f"      Database size: {data['database_size']}")
