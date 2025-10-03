@@ -3,6 +3,7 @@ import time
 import subprocess
 from datetime import datetime
 from typing import Optional, TYPE_CHECKING
+from docker.models.containers import Container
 
 if TYPE_CHECKING:
     from .compose_inspector import ServiceConfig
@@ -96,11 +97,12 @@ class DockerManager:
         )
 
         self.stop_service_container()
+        self.remove_service_container()
         self.update_service_container()
         self.build_service_container()
         self.remove_service_main_volume()
-        print("Restarting service container...")
-        self.start_service_container()
+        container = self.start_service_container()
+        self.verify_backup_volume_mounted(container=container)
 
         print(
             f"  Importing data from backup into new database '{self.database_name}'..."
@@ -183,9 +185,15 @@ class DockerManager:
         service_name = self.service_config.name
         try:
             subprocess.run(["docker", "compose", "stop", service_name], check=True)
-            subprocess.run(["docker", "compose", "rm", service_name], check=True)
         except subprocess.CalledProcessError as e:
             raise Exception(f"Failed to stop service {service_name}: {e}")
+
+    def remove_service_container(self):
+        service_name = self.service_config.name
+        try:
+            subprocess.run(["docker", "compose", "rm", service_name], check=True)
+        except subprocess.CalledProcessError as e:
+            raise Exception(f"Failed to remove service {service_name}: {e}")
 
     def update_service_container(self):
         """Pull latest image for the configured service."""
@@ -219,17 +227,18 @@ class DockerManager:
         except subprocess.CalledProcessError as e:
             raise Exception(f"Failed to remove volume {main_volume.name}: {e}")
 
-    def start_service_container(self):
+    def start_service_container(self) -> Container:
         """Start the configured service container."""
         service_name = self.service_config.name
         try:
             subprocess.run(["docker", "compose", "up", "-d", service_name], check=True)
             container = self.find_container_by_service()
             _ = self.check_container_status(container)
-            self.verify_backup_volume_mounted(container=container)
 
         except subprocess.CalledProcessError as e:
             raise Exception(f"Failed to restart service {service_name}: {e}")
+
+        return container
 
     def verify_backup_volume_mounted(self, container, sleep=3, timeout=30):
         """
@@ -258,34 +267,23 @@ class DockerManager:
         if not backup_dir:
             raise Exception("Backup directory not found in configuration")
 
-        restart_attempted = False
-        max_retries = timeout // sleep
+        max_retries = int(timeout // sleep)
 
         for attempt in range(max_retries):
             try:
-                exit_code, _ = container.exec_run(
-                    ["ls", "-la", backup_dir], user=self.container_user
-                )
-                if exit_code == 0:
+                container.reload()
+                is_healthy = self._check_backup_volume_health(container, backup_dir)
+                if is_healthy:
                     return
+
             except Exception:
                 pass
 
-            # If we're halfway through retries and haven't tried restart yet, try it
-            if attempt == max_retries // 2 and not restart_attempted:
+            # If we're halfway through retries, try restart
+            if attempt == max_retries // 2:
                 try:
-                    service_name = self.service_config.name
-                    subprocess.run(
-                        ["docker", "compose", "down", service_name], check=True
-                    )
-                    subprocess.run(
-                        ["docker", "compose", "up", "-d", service_name], check=True
-                    )
-                    restart_attempted = True
-
-                    # Update container reference after restart
-                    container = self.find_container_by_service()
-                    _ = self.check_container_status(container)
+                    self.stop_service_container()
+                    container = self.start_service_container()
 
                     time.sleep(sleep)
                     continue
@@ -296,12 +294,27 @@ class DockerManager:
             if attempt < max_retries - 1:
                 time.sleep(sleep)
             else:
-                restart_msg = (
-                    " (even after container restart)" if restart_attempted else ""
-                )
                 raise Exception(
-                    f"Backup volume failed to mount properly after container restart{restart_msg}. This may be a Docker Compose volume mounting issue."
+                    "Backup volume failed to mount properly after container restart. This may be a Docker Compose volume mounting issue."
                 )
+
+    def _check_backup_volume_health(self, container, backup_dir) -> bool:
+        # Check if the backup volume is mounted
+        mount_found = False
+        for mount in container.attrs.get("Mounts", []):
+            mount_path = mount.get("Destination", "")
+            if mount_path == backup_dir:
+                mount_found = True
+                break
+
+        # Check if its accessible by listing contents
+        exit_code, _ = container.exec_run(
+            ["ls", "-la", backup_dir], user=self.container_user
+        )
+        if exit_code == 0 and mount_found:
+            return True
+
+        return False
 
     def import_data_from_backup(self, backup_path: str):
         """
@@ -377,7 +390,7 @@ class DockerManager:
 
         return False
 
-    def find_container_by_service(self):
+    def find_container_by_service(self) -> Container:
         """Find the Docker container for the configured service."""
         if self.client is None:
             raise Exception(

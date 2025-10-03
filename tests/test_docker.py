@@ -3,6 +3,7 @@ Tests for Docker backup functionality.
 """
 
 import pytest
+import subprocess
 from unittest.mock import MagicMock, patch, Mock
 import docker.errors
 from postgres_upgrader import DockerManager, ServiceConfig, VolumeMount
@@ -440,9 +441,18 @@ class TestDockerManagerIntegration:
             # Mock successful subprocess calls (Docker commands)
             mock_subprocess.return_value = MagicMock(returncode=0)
 
-            # Mock a successful container
+            # Mock a successful container with proper volume mounts
             mock_container = MagicMock()
             mock_container.name = "test_postgres"
+            mock_container.attrs = {
+                "Mounts": [
+                    {
+                        "Destination": "/var/lib/postgresql/backups",
+                        "Source": "/var/lib/docker/volumes/test_backups/_data",
+                        "Type": "volume",
+                    }
+                ]
+            }
             mock_client.containers.list.return_value = [mock_container]
 
             # Mock successful command executions in sequence for verification workflow
@@ -457,6 +467,8 @@ class TestDockerManagerIntegration:
                 (0, b"12345"),  # file size check
                 (0, b"-- PostgreSQL database dump\n-- Version info"),  # header check
                 (0, b"5"),  # table count in backup
+                # verify_backup_volume_mounted call (ls command)
+                (0, b"directory listing"),  # backup volume accessibility check
                 # import_data_from_backup call
                 (0, b"Data imported successfully"),
                 # get_database_statistics calls (post-import stats)
@@ -737,3 +749,327 @@ class TestDockerManagerIntegration:
                         "label": "com.docker.compose.service=complex-postgres-service"
                     }
                 )
+
+
+class TestDockerManagerVolumeVerification:
+    """Test Docker Manager volume mounting verification functionality."""
+
+    def setup_method(self):
+        """Set up test fixtures for each test method."""
+        self.service_config = ServiceConfig(
+            name="postgres",
+            volumes=[
+                VolumeMount(
+                    name="database",
+                    path="/var/lib/postgresql/data",
+                    raw="database:/var/lib/postgresql/data",
+                    resolved_name="test_database",
+                ),
+                VolumeMount(
+                    name="backups",
+                    path="/var/lib/postgresql/backups",
+                    raw="backups:/var/lib/postgresql/backups",
+                    resolved_name="test_backups",
+                ),
+            ],
+        )
+        self.service_config.selected_main_volume = self.service_config.volumes[0]
+        self.service_config.selected_backup_volume = self.service_config.volumes[1]
+
+    def test_verify_backup_volume_mounted_success(self):
+        """Test successful backup volume verification."""
+        with patch("postgres_upgrader.docker.docker.from_env") as mock_docker:
+            mock_client = MagicMock()
+            mock_docker.return_value = mock_client
+
+            # Mock container with proper volume mount
+            mock_container = MagicMock()
+            mock_container.attrs = {
+                "Mounts": [
+                    {
+                        "Destination": "/var/lib/postgresql/backups",
+                        "Source": "/var/lib/docker/volumes/test_backups/_data",
+                        "Type": "volume",
+                    }
+                ]
+            }
+            mock_container.exec_run.return_value = (0, b"directory listing")
+
+            with DockerManager(
+                self.service_config, "postgres", "testuser", "testdb"
+            ) as docker_mgr:
+                # Should not raise exception
+                docker_mgr.verify_backup_volume_mounted(mock_container)
+
+                # Verify exec_run was called with correct parameters
+                mock_container.exec_run.assert_called_with(
+                    ["ls", "-la", "/var/lib/postgresql/backups"], user="postgres"
+                )
+
+    def test_verify_backup_volume_mounted_no_mount_found(self):
+        """Test failure when Docker doesn't detect the mount."""
+        with (
+            patch("postgres_upgrader.docker.docker.from_env") as mock_docker,
+            patch("postgres_upgrader.docker.subprocess.run") as mock_subprocess,
+        ):
+            mock_client = MagicMock()
+            mock_docker.return_value = mock_client
+
+            # Mock container with no matching mounts that never gets fixed
+            mock_container = MagicMock()
+            mock_container.attrs = {"Mounts": []}  # Always no mounts
+            mock_container.exec_run.return_value = (0, b"directory listing")
+
+            # Mock subprocess to prevent actual Docker calls during restart attempt
+            mock_subprocess.return_value = MagicMock(returncode=0)
+
+            with DockerManager(
+                self.service_config, "postgres", "testuser", "testdb"
+            ) as docker_mgr:
+                # Mock the container finding to avoid real Docker calls
+                docker_mgr.find_container_by_service = MagicMock(
+                    return_value=mock_container
+                )
+                docker_mgr.check_container_status = MagicMock(return_value=True)
+
+                with pytest.raises(
+                    Exception, match="Backup volume failed to mount properly"
+                ):
+                    # Use very short timeout to ensure failure even after restart
+                    docker_mgr.verify_backup_volume_mounted(
+                        mock_container,
+                        sleep=0.01,
+                        timeout=0.04,  # Only 4 attempts max
+                    )
+
+    def test_verify_backup_volume_mounted_directory_not_accessible(self):
+        """Test failure when directory exists in mounts but is not accessible."""
+        with (
+            patch("postgres_upgrader.docker.docker.from_env") as mock_docker,
+            patch("postgres_upgrader.docker.subprocess.run") as mock_subprocess,
+        ):
+            mock_client = MagicMock()
+            mock_docker.return_value = mock_client
+
+            # Mock container with mount but inaccessible directory that never gets fixed
+            mock_container = MagicMock()
+            mock_container.attrs = {
+                "Mounts": [
+                    {
+                        "Destination": "/var/lib/postgresql/backups",
+                        "Source": "/var/lib/docker/volumes/test_backups/_data",
+                        "Type": "volume",
+                    }
+                ]
+            }
+            mock_container.exec_run.return_value = (
+                1,
+                b"ls: cannot access",
+            )  # Always fails
+
+            # Mock subprocess to prevent actual Docker calls during restart attempt
+            mock_subprocess.return_value = MagicMock(returncode=0)
+
+            with DockerManager(
+                self.service_config, "postgres", "testuser", "testdb"
+            ) as docker_mgr:
+                # Mock the container finding to avoid real Docker calls
+                docker_mgr.find_container_by_service = MagicMock(
+                    return_value=mock_container
+                )
+                docker_mgr.check_container_status = MagicMock(return_value=True)
+
+                with pytest.raises(
+                    Exception, match="Backup volume failed to mount properly"
+                ):
+                    # Use very short timeout to ensure failure even after restart
+                    docker_mgr.verify_backup_volume_mounted(
+                        mock_container,
+                        sleep=0.01,
+                        timeout=0.04,  # Only 4 attempts max
+                    )
+
+    @patch("postgres_upgrader.docker.subprocess.run")
+    def test_verify_backup_volume_mounted_with_container_restart(self, mock_subprocess):
+        """Test container restart functionality during volume verification."""
+        with patch("postgres_upgrader.docker.docker.from_env") as mock_docker:
+            mock_client = MagicMock()
+            mock_docker.return_value = mock_client
+
+            # Mock container that fails initially but succeeds after restart
+            mock_container = MagicMock()
+
+            # Create a counter to track attempts and change behavior
+            attempt_count = 0
+
+            def mock_reload():
+                nonlocal attempt_count
+                attempt_count += 1
+
+            mock_container.reload = mock_reload
+
+            def get_attrs():
+                # Fail for first 3 attempts (0, 1, 2), succeed on attempt 3+
+                # With timeout=0.6 and sleep=0.1, max_retries=6, restart at attempt 3
+                if attempt_count < 4:  # Attempts 0, 1, 2, 3 fail
+                    return {"Mounts": []}
+                else:  # Attempts 4+ succeed (after restart)
+                    return {
+                        "Mounts": [
+                            {
+                                "Destination": "/var/lib/postgresql/backups",
+                                "Source": "/var/lib/docker/volumes/test_backups/_data",
+                                "Type": "volume",
+                            }
+                        ]
+                    }
+
+            # Mock the attrs property to change based on attempt_count
+            type(mock_container).attrs = property(lambda self: get_attrs())
+            mock_container.exec_run.return_value = (0, b"directory listing")
+
+            # Mock successful subprocess calls for container restart
+            mock_subprocess.return_value = MagicMock(returncode=0)
+
+            # Mock find_container_by_service to return container after restart
+            with DockerManager(
+                self.service_config, "postgres", "testuser", "testdb"
+            ) as docker_mgr:
+                docker_mgr.find_container_by_service = MagicMock(
+                    return_value=mock_container
+                )
+                docker_mgr.check_container_status = MagicMock(return_value=True)
+
+                # Should succeed after restart
+                # timeout=0.6, sleep=0.1 => max_retries=6, restart at attempt 3
+                docker_mgr.verify_backup_volume_mounted(
+                    mock_container, sleep=0.1, timeout=0.6
+                )
+
+                # Verify restart commands were called
+                expected_calls = [
+                    (["docker", "compose", "stop", "postgres"],),
+                    (["docker", "compose", "up", "-d", "postgres"],),
+                ]
+                actual_calls = [call[0] for call in mock_subprocess.call_args_list]
+                assert actual_calls == expected_calls
+
+    @patch("postgres_upgrader.docker.subprocess.run")
+    def test_verify_backup_volume_mounted_restart_failure(self, mock_subprocess):
+        """Test handling of container restart failures."""
+        with patch("postgres_upgrader.docker.docker.from_env") as mock_docker:
+            mock_client = MagicMock()
+            mock_docker.return_value = mock_client
+
+            # Mock container that always fails
+            mock_container = MagicMock()
+            mock_container.attrs = {"Mounts": []}
+            mock_container.exec_run.return_value = (1, b"not accessible")
+
+            # Mock failed subprocess calls for container restart
+            mock_subprocess.side_effect = subprocess.CalledProcessError(1, "docker")
+
+            with DockerManager(
+                self.service_config, "postgres", "testuser", "testdb"
+            ) as docker_mgr:
+                with pytest.raises(Exception, match="Failed to stop service postgres"):
+                    docker_mgr.verify_backup_volume_mounted(
+                        mock_container, sleep=0.1, timeout=0.5
+                    )
+
+    def test_verify_backup_volume_mounted_no_service_config(self):
+        """Test failure when service is not configured for PostgreSQL upgrade."""
+        # Create service config without selections
+        incomplete_service_config = ServiceConfig(name="postgres", volumes=[])
+
+        with patch("postgres_upgrader.docker.docker.from_env") as mock_docker:
+            mock_client = MagicMock()
+            mock_docker.return_value = mock_client
+            mock_container = MagicMock()
+
+            with DockerManager(
+                incomplete_service_config, "postgres", "testuser", "testdb"
+            ) as docker_mgr:
+                with pytest.raises(
+                    Exception,
+                    match="Service must have selected volumes for PostgreSQL upgrade",
+                ):
+                    docker_mgr.verify_backup_volume_mounted(mock_container)
+
+    def test_verify_backup_volume_mounted_no_backup_directory(self):
+        """Test failure when backup directory is not found in configuration."""
+        # Create service config with both volumes selected but backup volume has no path
+        service_config_no_backup = ServiceConfig(
+            name="postgres",
+            volumes=[
+                VolumeMount(
+                    name="database",
+                    path="/var/lib/postgresql/data",
+                    raw="database:/var/lib/postgresql/data",
+                    resolved_name="test_database",
+                ),
+                VolumeMount(
+                    name="backups",
+                    path="",  # Empty path to trigger the error
+                    raw="backups:",
+                    resolved_name="test_backups",
+                ),
+            ],
+        )
+        service_config_no_backup.selected_main_volume = (
+            service_config_no_backup.volumes[0]
+        )
+        service_config_no_backup.selected_backup_volume = (
+            service_config_no_backup.volumes[1]
+        )
+
+        with patch("postgres_upgrader.docker.docker.from_env") as mock_docker:
+            mock_client = MagicMock()
+            mock_docker.return_value = mock_client
+            mock_container = MagicMock()
+
+            with DockerManager(
+                service_config_no_backup, "postgres", "testuser", "testdb"
+            ) as docker_mgr:
+                with pytest.raises(
+                    Exception, match="Backup directory not found in configuration"
+                ):
+                    docker_mgr.verify_backup_volume_mounted(mock_container)
+
+    @patch("postgres_upgrader.docker.subprocess.run")
+    def test_verify_backup_volume_mounted_retry_logic(self, mock_subprocess):
+        """Test retry logic with different timeout and sleep parameters."""
+        with (
+            patch("postgres_upgrader.docker.docker.from_env") as mock_docker,
+            patch("postgres_upgrader.docker.time.sleep") as mock_sleep,
+        ):
+            mock_client = MagicMock()
+            mock_docker.return_value = mock_docker
+
+            # Mock container that always fails
+            mock_container = MagicMock()
+            mock_container.attrs = {"Mounts": []}
+            mock_container.exec_run.return_value = (1, b"not accessible")
+
+            # Mock subprocess to avoid actual container operations during restart
+            mock_subprocess.return_value = MagicMock(returncode=0)
+
+            with DockerManager(
+                self.service_config, "postgres", "testuser", "testdb"
+            ) as docker_mgr:
+                # Mock the container finding to avoid real Docker calls
+                docker_mgr.find_container_by_service = MagicMock(
+                    return_value=mock_container
+                )
+                docker_mgr.check_container_status = MagicMock(return_value=True)
+
+                with pytest.raises(
+                    Exception, match="Backup volume failed to mount properly"
+                ):
+                    docker_mgr.verify_backup_volume_mounted(
+                        mock_container, sleep=2, timeout=6
+                    )
+
+                # Should have called sleep 2 times (6//2 = 3 attempts, 2 sleeps)
+                assert mock_sleep.call_count == 2
+                mock_sleep.assert_called_with(2)
