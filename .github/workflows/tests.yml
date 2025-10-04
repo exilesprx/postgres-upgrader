@@ -1,0 +1,26 @@
+name: Quality Checks
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  tests:
+    runs-on: ubuntu
+    container:
+      image: python:3.14-slim
+    name: Tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install UV
+        run: pip install uv
+
+      - name: Install packages
+        run: |
+          uv lock --check
+          uv sync
+
+      - name: Run tests
+        run: uv run pytest
