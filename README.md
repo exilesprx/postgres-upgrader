@@ -64,13 +64,13 @@ The tool requires:
 # Navigate to your Docker Compose project directory
 cd /path/to/your/docker-compose-project
 
-# With uv (from the postgres-updater directory)
+# With uv (from the postgres-upgrader directory)
 uv run main.py
 
 # After installation with pip/poetry
 python -m postgres_upgrader
 # or if installed globally:
-postgres-updater
+postgres-upgrader
 ```
 
 The tool will:
@@ -106,17 +106,17 @@ Backup created successfully: /var/lib/postgresql/backups/backup-20251001_165130.
 🔍 Verifying backup integrity...
    Backup verified: 12345 bytes, ~5 tables
 [+] Stopping 1/1
- ✔ Container postgres-updater-postgres-1  Stopped                                                                           0.4s
+ ✔ Container postgres-upgrader-postgres-1  Stopped                                                                           0.4s
 [+] Removing 1/0
- ✔ Container postgres-updater-postgres-1  Removed                                                                           0.0s
+ ✔ Container postgres-upgrader-postgres-1  Removed                                                                           0.0s
 [+] Pulling 1/1
  ✔ postgres Pulled                                                                                                          0.6s
 [+] Building 0.0s (0/0)                                                                                           docker:default
-postgres-updater_database
+postgres-upgrader_database
 Restarting service container...
 [+] Running 2/2
- ✔ Volume "postgres-updater_database"     Created                                                                           0.0s
- ✔ Container postgres-updater-postgres-1  Started                                                                           0.2s
+ ✔ Volume "postgres-upgrader_database"     Created                                                                           0.0s
+ ✔ Container postgres-upgrader-postgres-1  Started                                                                           0.2s
 📥 Importing data from backup into new database 'testing'...
 ✅ Verifying import success...
    ✅ Import verification successful:
@@ -131,7 +131,7 @@ Restarting service container...
 This tool uses **Docker Compose's own configuration resolution** via the `docker compose config` command to get the exact same configuration that Docker Compose would use, including:
 
 - **Environment Variables**: Automatically resolves all variable substitutions
-- **Volume Prefixes**: Gets actual volume names with project prefixes (e.g., `postgres-updater_database`)
+- **Volume Prefixes**: Gets actual volume names with project prefixes (e.g., `postgres-upgrader_database`)
 - **Network Resolution**: Handles complex networking configurations
 - **Real-time Configuration**: Always reflects current project state
 - **Error Prevention**: Eliminates manual parsing inconsistencies
@@ -163,10 +163,10 @@ data_volume = next((v for v in volumes if v.name == "database"), None)
 
 if backup_volume:
     print(f"Backup volume path: {backup_volume.path}")
-    print(f"Resolved volume name: {backup_volume.resolved_name}")  # e.g., "postgres-updater_backups"
+    print(f"Resolved volume name: {backup_volume.resolved_name}")  # e.g., "postgres-upgrader_backups"
 if data_volume:
     print(f"Data volume path: {data_volume.path}")
-    print(f"Resolved volume name: {data_volume.resolved_name}")  # e.g., "postgres-updater_database"
+    print(f"Resolved volume name: {data_volume.resolved_name}")  # e.g., "postgres-upgrader_database"
 ```
 
 ```python
@@ -207,7 +207,7 @@ if selected_service:
     container_user = prompt_container_user()
 
     # Create backup using DockerManager with all required parameters
-    with DockerManager(selected_service, container_user, user, database) as docker_mgr:
+    with DockerManager(compose_data.name, selected_service, container_user, user, database) as docker_mgr:
         backup_path = docker_mgr.create_postgres_backup()
         print(f"Backup created: {backup_path}")
 ```
@@ -237,7 +237,7 @@ if selected_service:
     container_user = prompt_container_user()
 
     # Perform complete upgrade workflow
-    with DockerManager(selected_service, container_user, user, database) as docker_mgr:
+    with DockerManager(compose_data.name, selected_service, container_user, user, database) as docker_mgr:
         docker_mgr.perform_postgres_upgrade(console)
         print("Upgrade completed successfully!")
 ```

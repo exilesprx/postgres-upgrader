@@ -18,13 +18,14 @@ class DockerManager:
     for streamlined PostgreSQL upgrade workflows.
 
     Args:
+        project_name: Docker Compose project name for container filtering
         service_config: ServiceConfig with selected volumes and resolved data (required)
         container_user: User to run container commands as (e.g., "postgres")
         database_user: PostgreSQL username for authentication
         database_name: PostgreSQL database name for operations
 
     Example:
-        with DockerManager(selected_service, "postgres", "myuser", "mydb") as docker_mgr:
+        with DockerManager("my_project", selected_service, "postgres", "myuser", "mydb") as docker_mgr:
             docker_mgr.perform_postgres_upgrade()
     """
 
