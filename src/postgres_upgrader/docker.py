@@ -30,12 +30,14 @@ class DockerManager:
 
     def __init__(
         self,
+        project_name: str,
         service_config: "ServiceConfig",
         container_user: str,
         database_user: str,
         database_name: str,
     ):
         self.client: Optional[docker.DockerClient] = None
+        self.project_name = project_name
         self.service_config = service_config
         self.container_user = container_user
         self.database_user = database_user
@@ -396,9 +398,11 @@ class DockerManager:
             )
 
         service_name = self.service_config.name
-        containers = self.client.containers.list(
-            filters={"label": f"com.docker.compose.service={service_name}"}
-        )
+        labels = [f"com.docker.compose.service={service_name}"]
+        if self.project_name:
+            labels.append(f"com.docker.compose.project={self.project_name}")
+
+        containers = self.client.containers.list(filters={"label": labels})
 
         if len(containers) == 0:
             raise Exception(f"No containers found for service {service_name}")

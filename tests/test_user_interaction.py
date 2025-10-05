@@ -230,10 +230,11 @@ class TestIdentifyServiceVolumes:
         )
 
         self.compose_config = DockerComposeConfig(
+            name="test_project",
             services={
                 "postgres": self.postgres_service,
                 "nginx": self.nginx_service,
-            }
+            },
         )
 
     def test_identify_service_volumes_complete_workflow(self):
@@ -266,7 +267,7 @@ class TestIdentifyServiceVolumes:
 
     def test_identify_service_volumes_no_services(self):
         """Test behavior when no services are available."""
-        empty_config = DockerComposeConfig(services={})
+        empty_config = DockerComposeConfig(name="test_project", services={})
 
         with patch("builtins.print") as mock_print:
             result = identify_service_volumes(empty_config)
@@ -298,7 +299,9 @@ class TestIdentifyServiceVolumes:
     def test_identify_service_volumes_no_volumes_for_service(self):
         """Test behavior when selected service has no volumes."""
         service_no_volumes = ServiceConfig(name="redis", volumes=[])
-        config_no_volumes = DockerComposeConfig(services={"redis": service_no_volumes})
+        config_no_volumes = DockerComposeConfig(
+            name="test_project", services={"redis": service_no_volumes}
+        )
 
         with patch("postgres_upgrader.prompt.prompt_user_choice") as mock_prompt:
             mock_prompt.return_value = "redis"
@@ -345,7 +348,9 @@ class TestIdentifyServiceVolumes:
                 ),
             ],
         )
-        single_config = DockerComposeConfig(services={"single": single_volume_service})
+        single_config = DockerComposeConfig(
+            name="test_project", services={"single": single_volume_service}
+        )
 
         with patch("postgres_upgrader.prompt.prompt_user_choice") as mock_prompt:
             # Mock the responses: service selection, main volume, then empty choices handling
@@ -446,7 +451,9 @@ class TestUserInteractionEdgeCases:
             ],
         )
 
-        complex_config = DockerComposeConfig(services={"complex-app": complex_service})
+        complex_config = DockerComposeConfig(
+            name="test_project", services={"complex-app": complex_service}
+        )
 
         with patch("postgres_upgrader.prompt.prompt_user_choice") as mock_prompt:
             mock_prompt.side_effect = [
@@ -502,7 +509,9 @@ class TestUserInteractionEdgeCases:
             ],
         )
 
-        config_with_env = DockerComposeConfig(services={"postgres": service_with_env})
+        config_with_env = DockerComposeConfig(
+            name="test_project", services={"postgres": service_with_env}
+        )
 
         with patch("postgres_upgrader.prompt.prompt_user_choice") as mock_prompt:
             mock_prompt.side_effect = [
@@ -561,10 +570,11 @@ class TestPromptIntegrationWorkflows:
         )
 
         compose_config = DockerComposeConfig(
+            name="test_project",
             services={
                 "postgres": postgres_service,
                 "redis": redis_service,
-            }
+            },
         )
 
         # Mock the entire workflow
@@ -611,7 +621,9 @@ class TestPromptIntegrationWorkflows:
             ],
         )
 
-        compose_config = DockerComposeConfig(services={"postgres": postgres_service})
+        compose_config = DockerComposeConfig(
+            name="test_project", services={"postgres": postgres_service}
+        )
 
         # First attempt: user cancels during volume selection
         with patch("postgres_upgrader.prompt.prompt_user_choice") as mock_choice:
@@ -667,7 +679,9 @@ class TestPromptErrorHandling:
         corrupted_service = ServiceConfig(name="postgres")
         corrupted_service.volumes = None  # Corrupt data
 
-        compose_config = DockerComposeConfig(services={"postgres": corrupted_service})
+        compose_config = DockerComposeConfig(
+            name="test_project", services={"postgres": corrupted_service}
+        )
 
         with patch("postgres_upgrader.prompt.prompt_user_choice") as mock_prompt:
             mock_prompt.return_value = "postgres"

@@ -113,6 +113,7 @@ class ServiceConfig:
 class DockerComposeConfig:
     """Parsed Docker Compose configuration."""
 
+    name: Optional[str]
     services: Dict[str, ServiceConfig] = field(default_factory=dict)
 
     def get_service(self, name: str) -> Optional[ServiceConfig]:
@@ -167,9 +168,10 @@ def parse_docker_compose() -> DockerComposeConfig:
         ) from e
 
     if raw_data is None:
-        return DockerComposeConfig(services={})
+        return DockerComposeConfig(name=None, services={})
 
     services = {}
+    project_name = raw_data.get("name")
     raw_services = raw_data.get("services", {})
     volume_mappings = raw_data.get("volumes", {})
 
@@ -189,4 +191,4 @@ def parse_docker_compose() -> DockerComposeConfig:
             volumes=volume_mounts,
         )
 
-    return DockerComposeConfig(services=services)
+    return DockerComposeConfig(name=project_name, services=services)

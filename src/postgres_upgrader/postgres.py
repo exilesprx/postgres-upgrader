@@ -80,5 +80,7 @@ def run_postgres_upgrade() -> None:
         raise Exception("A valid container user is required to proceed")
 
     # Execute the upgrade workflow
-    with DockerManager(selected_service, container_user, user, database) as docker_mgr:
+    with DockerManager(
+        compose_config.name, selected_service, container_user, user, database
+    ) as docker_mgr:
         docker_mgr.perform_postgres_upgrade(console)
