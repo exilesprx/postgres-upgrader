@@ -308,89 +308,6 @@ class DockerManager:
                     "Backup volume failed to mount properly after container restart. This may be a Docker Compose volume mounting issue."
                 )
 
-    def _force_volume_reconnect(
-        self, container: Container, backup_volume: Optional["VolumeMount"]
-    ):
-        """
-        Force volume reconnection without full container restart.
-
-        Attempts to re-establish Docker volume connection by performing
-        filesystem sync operations and refreshing Docker's internal state
-        for both the container and volume objects.
-
-        Args:
-            container: Docker container object to reconnect volumes for
-            backup_volume: VolumeMount configuration for the backup volume
-                          to reconnect (can be None)
-
-        Raises:
-            Exception: If volume reconnection operations fail or
-                      DockerManager is not properly initialized
-
-        Note:
-            This is a lightweight alternative to full container restart
-            that attempts to resolve volume mounting issues through
-            Docker API operations.
-        """
-        if self.client is None:
-            raise Exception("DockerManager not properly initialized.")
-
-        try:
-            container.exec_run(["sync"], user="root")
-
-            if backup_volume and backup_volume.name:
-                try:
-                    volume = self.client.volumes.get(backup_volume.name)
-                    volume.reload()
-                except docker.errors.NotFound:
-                    pass
-
-            container.reload()
-
-        except Exception as e:
-            raise Exception(f"Volume reconnection failed: {e}")
-
-    def _check_backup_volume_health(
-        self, container, backup_volume: Optional["VolumeMount"]
-    ) -> bool:
-        """
-        Check if the backup volume is properly mounted and accessible.
-
-        Verifies both that the volume is mounted in the container and that
-        it's accessible by attempting to list its contents.
-
-        Args:
-            container: Docker container object to check volume mounting in
-            backup_volume: VolumeMount configuration for the backup volume
-                          to check (can be None)
-
-        Returns:
-            bool: True if volume is properly mounted and accessible, False otherwise
-
-        Note:
-            This method performs both mount verification (checking container
-            mount points) and accessibility verification (testing file operations).
-        """
-        if not backup_volume or not backup_volume.path:
-            return False
-
-        # Check if the backup volume is mounted
-        mount_found = False
-        for mount in container.attrs.get("Mounts", []):
-            mount_path = mount.get("Destination", "")
-            if mount_path == backup_volume.path:
-                mount_found = True
-                break
-
-        # Check if its accessible by listing contents
-        exit_code, _ = container.exec_run(
-            ["ls", "-la", backup_volume.path], user=self.container_user
-        )
-        if exit_code == 0 and mount_found:
-            return True
-
-        return False
-
     def import_data_from_backup(self, backup_path: str):
         """
         Import PostgreSQL data from a backup file into the database.
@@ -705,3 +622,86 @@ class DockerManager:
             "database_size": db_size,
             "database_name": self.database_name,
         }
+
+    def _force_volume_reconnect(
+        self, container: Container, backup_volume: Optional["VolumeMount"]
+    ):
+        """
+        Force volume reconnection without full container restart.
+
+        Attempts to re-establish Docker volume connection by performing
+        filesystem sync operations and refreshing Docker's internal state
+        for both the container and volume objects.
+
+        Args:
+            container: Docker container object to reconnect volumes for
+            backup_volume: VolumeMount configuration for the backup volume
+                          to reconnect (can be None)
+
+        Raises:
+            Exception: If volume reconnection operations fail or
+                      DockerManager is not properly initialized
+
+        Note:
+            This is a lightweight alternative to full container restart
+            that attempts to resolve volume mounting issues through
+            Docker API operations.
+        """
+        if self.client is None:
+            raise Exception("DockerManager not properly initialized.")
+
+        try:
+            container.exec_run(["sync"], user="root")
+
+            if backup_volume and backup_volume.name:
+                try:
+                    volume = self.client.volumes.get(backup_volume.name)
+                    volume.reload()
+                except docker.errors.NotFound:
+                    pass
+
+            container.reload()
+
+        except Exception as e:
+            raise Exception(f"Volume reconnection failed: {e}")
+
+    def _check_backup_volume_health(
+        self, container, backup_volume: Optional["VolumeMount"]
+    ) -> bool:
+        """
+        Check if the backup volume is properly mounted and accessible.
+
+        Verifies both that the volume is mounted in the container and that
+        it's accessible by attempting to list its contents.
+
+        Args:
+            container: Docker container object to check volume mounting in
+            backup_volume: VolumeMount configuration for the backup volume
+                          to check (can be None)
+
+        Returns:
+            bool: True if volume is properly mounted and accessible, False otherwise
+
+        Note:
+            This method performs both mount verification (checking container
+            mount points) and accessibility verification (testing file operations).
+        """
+        if not backup_volume or not backup_volume.path:
+            return False
+
+        # Check if the backup volume is mounted
+        mount_found = False
+        for mount in container.attrs.get("Mounts", []):
+            mount_path = mount.get("Destination", "")
+            if mount_path == backup_volume.path:
+                mount_found = True
+                break
+
+        # Check if its accessible by listing contents
+        exit_code, _ = container.exec_run(
+            ["ls", "-la", backup_volume.path], user=self.container_user
+        )
+        if exit_code == 0 and mount_found:
+            return True
+
+        return False
