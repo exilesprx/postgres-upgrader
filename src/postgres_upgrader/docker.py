@@ -307,7 +307,7 @@ class DockerManager:
                 )
 
     def _force_volume_reconnect(
-        self, container, backup_volume: Optional["VolumeMount"]
+        self, container: Container, backup_volume: Optional["VolumeMount"]
     ):
         """
         Force volume reconnection without full container restart.
@@ -317,6 +317,9 @@ class DockerManager:
         2. Refreshing Docker's container and volume state
         3. Using Docker API to reload volume metadata
         """
+        if self.client is None:
+            raise Exception("DockerManager not properly initialized.")
+
         try:
             container.exec_run(["sync"], user="root")
 
