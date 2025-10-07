@@ -34,8 +34,6 @@ def prompt_user_choice(
         return answers["choice"] if answers else None
 
     except KeyboardInterrupt:
-        # User cancelled with Ctrl+C - respect their intention to quit
-        print("\nCancelled by user")
         return None
 
 
@@ -53,7 +51,6 @@ def identify_service_volumes(
     """
     # Get available services directly from data class
     if not data.services:
-        print("No services found in the compose file.")
         return None
 
     # Let user choose service
@@ -65,12 +62,10 @@ def identify_service_volumes(
     # Get volumes for chosen service using the data class method
     service = data.get_service(service_name)
     if not service:
-        print(f"Service '{service_name}' not found.")
         return None
 
     volumes = service.volumes
     if not volumes:
-        print(f"No volumes found for service '{service_name}'.")
         return None
 
     # Convert VolumeMount objects to strings for user selection
@@ -122,5 +117,4 @@ def prompt_container_user() -> Optional[str]:
         return answers["container_user"] if answers else None
 
     except KeyboardInterrupt:
-        print("\nCancelled by user")
         return None
