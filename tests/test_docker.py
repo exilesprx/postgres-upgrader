@@ -28,8 +28,8 @@ class TestDockerManager:
                 ),
                 VolumeMount(
                     name="backups",
-                    path="/tmp/postgresql/tmp/postgresql/backups",
-                    raw="backups:/tmp/postgresql/tmp/postgresql/backups",
+                    path="/tmp/postgresql/backups",
+                    raw="backups:/tmp/postgresql/backups",
                     resolved_name="test_backups",
                 ),
             ],
@@ -155,8 +155,8 @@ class TestDockerManagerErrorHandling:
                 ),
                 VolumeMount(
                     name="backups",
-                    path="/var/lib/postgresql/tmp/postgresql/backups",
-                    raw="backups:/var/lib/postgresql/tmp/postgresql/backups",
+                    path="/tmp/postgresql/backups",
+                    raw="backups:/tmp/postgresql/backups",
                     resolved_name="test_backups",
                 ),
             ],
@@ -430,8 +430,8 @@ class TestDockerManagerIntegration:
                 ),
                 VolumeMount(
                     name="backups",
-                    path="/var/lib/postgresql/tmp/postgresql/backups",
-                    raw="backups:/var/lib/postgresql/tmp/postgresql/backups",
+                    path="/tmp/postgresql/backups",
+                    raw="backups:/tmp/postgresql/backups",
                     resolved_name="test_backups",
                 ),
             ],
@@ -457,7 +457,7 @@ class TestDockerManagerIntegration:
             mock_container.attrs = {
                 "Mounts": [
                     {
-                        "Destination": "/var/lib/postgresql/tmp/postgresql/backups",
+                        "Destination": "/tmp/postgresql/backups",
                         "Source": "/var/lib/docker/volumes/test_backups/_data",
                         "Type": "volume",
                     }
@@ -699,8 +699,8 @@ class TestDockerManagerIntegration:
 
                 # Should have same configuration but different timestamps
                 assert backup_path1 != backup_path2  # Different timestamps
-                assert "/var/lib/postgresql/tmp/postgresql/backups/" in backup_path1
-                assert "/var/lib/postgresql/tmp/postgresql/backups/" in backup_path2
+                assert "/tmp/postgresql/backups/" in backup_path1
+                assert "/tmp/postgresql/backups/" in backup_path2
 
                 # Verify container discovery happened multiple times but with same instance
                 assert mock_client.containers.list.call_count >= 3
@@ -795,8 +795,8 @@ class TestDockerManagerVolumeVerification:
                 ),
                 VolumeMount(
                     name="backups",
-                    path="/var/lib/postgresql/tmp/postgresql/backups",
-                    raw="backups:/var/lib/postgresql/tmp/postgresql/backups",
+                    path="/tmp/postgresql/backups",
+                    raw="backups:/tmp/postgresql/backups",
                     resolved_name="test_backups",
                 ),
             ],
@@ -815,7 +815,7 @@ class TestDockerManagerVolumeVerification:
             mock_container.attrs = {
                 "Mounts": [
                     {
-                        "Destination": "/var/lib/postgresql/tmp/postgresql/backups",
+                        "Destination": "/tmp/postgresql/backups",
                         "Source": "/var/lib/docker/volumes/test_backups/_data",
                         "Type": "volume",
                     }
@@ -831,7 +831,7 @@ class TestDockerManagerVolumeVerification:
 
                 # Verify exec_run was called with correct parameters
                 mock_container.exec_run.assert_called_with(
-                    ["ls", "-la", "/var/lib/postgresql/tmp/postgresql/backups"],
+                    ["ls", "-la", "/tmp/postgresql/backups"],
                     user="postgres",
                 )
 
@@ -885,7 +885,7 @@ class TestDockerManagerVolumeVerification:
             mock_container.attrs = {
                 "Mounts": [
                     {
-                        "Destination": "/var/lib/postgresql/tmp/postgresql/backups",
+                        "Destination": "/tmp/postgresql/backups",
                         "Source": "/var/lib/docker/volumes/test_backups/_data",
                         "Type": "volume",
                     }
@@ -949,7 +949,7 @@ class TestDockerManagerVolumeVerification:
                     return {
                         "Mounts": [
                             {
-                                "Destination": "/var/lib/postgresql/tmp/postgresql/backups",
+                                "Destination": "/tmp/postgresql/backups",
                                 "Source": "/var/lib/docker/volumes/test_backups/_data",
                                 "Type": "volume",
                             }

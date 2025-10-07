@@ -245,9 +245,14 @@ class DockerManager:
         """
         Verify that the backup volume is properly mounted and accessible.
 
-        Uses robust retry logic with container restart fallback to handle
-        intermittent Docker Compose volume mounting issues. Calculates the number
-        of retry attempts based on timeout and sleep interval.
+        Uses a two-tier retry strategy to handle intermittent Docker Compose
+        volume mounting issues:
+        1. First tier: Lightweight volume reconnection using Docker API
+        2. Second tier: Full container restart as fallback
+
+        Calculates the number of retry attempts based on timeout and sleep interval.
+        At the halfway point, attempts volume reconnection before falling back
+        to container restart if necessary.
 
         Args:
             container: Docker container object to check backup volume in
@@ -258,8 +263,8 @@ class DockerManager:
             Exception: If backup volume is not accessible after all retry attempts
 
         Note:
-            Will attempt container restart at the halfway point of retries if
-            the backup volume is still not accessible.
+            The two-tier approach minimizes downtime by trying lightweight fixes
+            before resorting to more disruptive container restarts.
         """
         if not self.service_config.is_configured_for_postgres_upgrade():
             raise Exception("Service must have selected volumes for PostgreSQL upgrade")

@@ -10,7 +10,7 @@ A specialized tool for managing PostgreSQL upgrades in Docker Compose environmen
 - 📝 **Intuitive Interface**: Interactive prompts with arrow-key navigation
 - 🚀 **Automated Workflow**: Single method performs complete upgrade sequence
 - 🛡️ **Data Verification**: Pre-backup validation and post-import verification to ensure data integrity
-- 🔧 **Volume Verification**: Robust backup volume mounting verification with retry logic and container restart fallback
+- 🔧 **Volume Verification**: Two-tier backup volume mounting verification with lightweight Docker API reconnection and container restart fallback
 - ✅ **Well-Tested**: Comprehensive test suite covering error handling, edge cases, integration scenarios, and volume verification
 
 ## Installation
@@ -94,15 +94,15 @@ The tool will:
 
 [?] Select the main volume::
  > database:/var/lib/postgresql/data
-   backups:/var/lib/postgresql/backups
+   backups:/tmp/postgresql/backups
 
 [?] Select the backup volume::
- > backups:/var/lib/postgresql/backups
+ > backups:/tmp/postgresql/backups
 
 📊 Collecting database statistics...
    Current database: 5 tables, 25 MB
 💾 Creating backup of database 'testing' for user 'tester'...
-Backup created successfully: /var/lib/postgresql/backups/backup-20251001_165130.sql
+Backup created successfully: /tmp/postgresql/backups/backup-20251001_165130.sql
 🔍 Verifying backup integrity...
    Backup verified: 12345 bytes, ~5 tables
 [+] Stopping 1/1
@@ -289,8 +289,7 @@ postgres-upgrader/
 │   ├── compose_inspector.py       # Docker Compose config parsing via subprocess
 │   ├── prompt.py                  # User interaction and volume selection
 │   ├── docker.py                  # Docker operations and PostgreSQL backup
-│   ├── postgres.py                # Main upgrade workflow logic
-│   └── env.py                     # Environment configuration management
+│   └── postgres.py                # Main upgrade workflow logic
 ├── tests/                         # Test suite
 │   ├── test_docker.py              # Docker operations tests (including volume verification)
 │   ├── test_parse_docker_compose.py  # Config resolution tests
@@ -321,7 +320,7 @@ This tool provides a complete PostgreSQL upgrade solution including:
 - 📥 **Backup import and restoration** with comprehensive verification
 - 🔧 **Complete upgrade workflow automation** - single command handles entire process
 - 🛡️ **Data integrity verification** - pre-backup and post-import validation
-- 🔧 **Volume mounting verification** with retry logic and automatic container restart
+- 🔧 **Volume mounting verification** with two-tier retry strategy - lightweight Docker API reconnection followed by container restart fallback
 - 📊 **Database statistics collection** for upgrade verification
 - 🎨 **Rich terminal output** with colored progress indicators and status messages
 
