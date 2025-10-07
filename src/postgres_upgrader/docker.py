@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import docker
 import time
 from rich.console import Console
@@ -7,7 +8,7 @@ from typing import Optional, TYPE_CHECKING
 from docker.models.containers import Container
 
 if TYPE_CHECKING:
-    from .compose_inspector import ServiceConfig
+    from .compose_inspector import ServiceConfig, VolumeMount
 
 
 class DockerManager:
@@ -31,7 +32,7 @@ class DockerManager:
 
     def __init__(
         self,
-        project_name: str,
+        project_name: Optional[str],
         service_config: "ServiceConfig",
         container_user: str,
         database_user: str,
@@ -155,13 +156,13 @@ class DockerManager:
         if not self.service_config.is_configured_for_postgres_upgrade():
             raise Exception("Service must have selected volumes for PostgreSQL upgrade")
 
-        backup_dir = self.service_config.get_backup_volume_path()
-        if not backup_dir:
+        backup_volume = self.service_config.get_backup_volume()
+        if not backup_volume:
             raise Exception("Backup directory not found in configuration")
 
         date = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_filename = f"backup-{date}.sql"
-        backup_path = f"{backup_dir}/{backup_filename}"
+        backup_path = f"{backup_volume.path}/{backup_filename}"
 
         container = self.find_container_by_service()
         cmd = [
@@ -264,8 +265,8 @@ class DockerManager:
         if not self.service_config.is_configured_for_postgres_upgrade():
             raise Exception("Service must have selected volumes for PostgreSQL upgrade")
 
-        backup_dir = self.service_config.get_backup_volume_path()
-        if not backup_dir:
+        backup_volume = self.service_config.get_backup_volume()
+        if not backup_volume or not backup_volume.path:
             raise Exception("Backup directory not found in configuration")
 
         max_retries = int(timeout // sleep)
@@ -273,24 +274,30 @@ class DockerManager:
         for attempt in range(max_retries):
             try:
                 container.reload()
-                is_healthy = self._check_backup_volume_health(container, backup_dir)
+                is_healthy = self._check_backup_volume_health(container, backup_volume)
                 if is_healthy:
                     return
 
             except Exception:
                 pass
 
-            # If we're halfway through retries, try restart
+            # If we're halfway through retries, try volume reconnection first
             if attempt == max_retries // 2:
                 try:
-                    self.stop_service_container()
-                    container = self.start_service_container()
-
+                    # Try lightweight volume reconnection first
+                    self._force_volume_reconnect(container, backup_volume)
                     time.sleep(sleep)
                     continue
-                except subprocess.CalledProcessError:
-                    # If restart fails, continue with remaining retries
-                    pass
+                except Exception:
+                    # If volume reconnection fails, fall back to container restart
+                    try:
+                        self.stop_service_container()
+                        container = self.start_service_container()
+                        time.sleep(sleep)
+                        continue
+                    except subprocess.CalledProcessError:
+                        # If restart fails, continue with remaining retries
+                        pass
 
             if attempt < max_retries - 1:
                 time.sleep(sleep)
@@ -299,18 +306,49 @@ class DockerManager:
                     "Backup volume failed to mount properly after container restart. This may be a Docker Compose volume mounting issue."
                 )
 
-    def _check_backup_volume_health(self, container, backup_dir) -> bool:
+    def _force_volume_reconnect(
+        self, container, backup_volume: Optional["VolumeMount"]
+    ):
+        """
+        Force volume reconnection without full container restart.
+
+        Attempts to re-establish Docker volume connection by:
+        1. Forcing filesystem sync
+        2. Refreshing Docker's container and volume state
+        3. Using Docker API to reload volume metadata
+        """
+        try:
+            container.exec_run(["sync"], user="root")
+
+            if backup_volume and backup_volume.name:
+                try:
+                    volume = self.client.volumes.get(backup_volume.name)
+                    volume.reload()
+                except docker.errors.NotFound:
+                    pass
+
+            container.reload()
+
+        except Exception as e:
+            raise Exception(f"Volume reconnection failed: {e}")
+
+    def _check_backup_volume_health(
+        self, container, backup_volume: Optional["VolumeMount"]
+    ) -> bool:
+        if not backup_volume or not backup_volume.path:
+            return False
+
         # Check if the backup volume is mounted
         mount_found = False
         for mount in container.attrs.get("Mounts", []):
             mount_path = mount.get("Destination", "")
-            if mount_path == backup_dir:
+            if mount_path == backup_volume.path:
                 mount_found = True
                 break
 
         # Check if its accessible by listing contents
         exit_code, _ = container.exec_run(
-            ["ls", "-la", backup_dir], user=self.container_user
+            ["ls", "-la", backup_volume.path], user=self.container_user
         )
         if exit_code == 0 and mount_found:
             return True

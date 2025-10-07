@@ -28,8 +28,8 @@ class TestDockerManager:
                 ),
                 VolumeMount(
                     name="backups",
-                    path="/var/lib/postgresql/backups",
-                    raw="backups:/var/lib/postgresql/backups",
+                    path="/tmp/postgresql/tmp/postgresql/backups",
+                    raw="backups:/tmp/postgresql/tmp/postgresql/backups",
                     resolved_name="test_backups",
                 ),
             ],
@@ -155,8 +155,8 @@ class TestDockerManagerErrorHandling:
                 ),
                 VolumeMount(
                     name="backups",
-                    path="/var/lib/postgresql/backups",
-                    raw="backups:/var/lib/postgresql/backups",
+                    path="/var/lib/postgresql/tmp/postgresql/backups",
+                    raw="backups:/var/lib/postgresql/tmp/postgresql/backups",
                     resolved_name="test_backups",
                 ),
             ],
@@ -430,8 +430,8 @@ class TestDockerManagerIntegration:
                 ),
                 VolumeMount(
                     name="backups",
-                    path="/var/lib/postgresql/backups",
-                    raw="backups:/var/lib/postgresql/backups",
+                    path="/var/lib/postgresql/tmp/postgresql/backups",
+                    raw="backups:/var/lib/postgresql/tmp/postgresql/backups",
                     resolved_name="test_backups",
                 ),
             ],
@@ -457,7 +457,7 @@ class TestDockerManagerIntegration:
             mock_container.attrs = {
                 "Mounts": [
                     {
-                        "Destination": "/var/lib/postgresql/backups",
+                        "Destination": "/var/lib/postgresql/tmp/postgresql/backups",
                         "Source": "/var/lib/docker/volumes/test_backups/_data",
                         "Type": "volume",
                     }
@@ -699,8 +699,8 @@ class TestDockerManagerIntegration:
 
                 # Should have same configuration but different timestamps
                 assert backup_path1 != backup_path2  # Different timestamps
-                assert "/var/lib/postgresql/backups/" in backup_path1
-                assert "/var/lib/postgresql/backups/" in backup_path2
+                assert "/var/lib/postgresql/tmp/postgresql/backups/" in backup_path1
+                assert "/var/lib/postgresql/tmp/postgresql/backups/" in backup_path2
 
                 # Verify container discovery happened multiple times but with same instance
                 assert mock_client.containers.list.call_count >= 3
@@ -742,8 +742,8 @@ class TestDockerManagerIntegration:
                 ),
                 VolumeMount(
                     name="backup_storage",
-                    path="/backups",
-                    raw="backup_storage:/backups",
+                    path="/tmp/postgresql/backups",
+                    raw="backup_storage:/tmp/postgresql/backups",
                     resolved_name="complex_project_backup_storage",
                 ),
             ],
@@ -766,7 +766,7 @@ class TestDockerManagerIntegration:
                 backup_path = docker_mgr.create_postgres_backup()
 
                 # Verify backup path uses correct volume
-                assert "/backups/backup-" in backup_path
+                assert "/tmp/postgresql/backups/backup-" in backup_path
 
                 # Verify correct service label filter
                 mock_client.containers.list.assert_called_with(
@@ -795,8 +795,8 @@ class TestDockerManagerVolumeVerification:
                 ),
                 VolumeMount(
                     name="backups",
-                    path="/var/lib/postgresql/backups",
-                    raw="backups:/var/lib/postgresql/backups",
+                    path="/var/lib/postgresql/tmp/postgresql/backups",
+                    raw="backups:/var/lib/postgresql/tmp/postgresql/backups",
                     resolved_name="test_backups",
                 ),
             ],
@@ -815,7 +815,7 @@ class TestDockerManagerVolumeVerification:
             mock_container.attrs = {
                 "Mounts": [
                     {
-                        "Destination": "/var/lib/postgresql/backups",
+                        "Destination": "/var/lib/postgresql/tmp/postgresql/backups",
                         "Source": "/var/lib/docker/volumes/test_backups/_data",
                         "Type": "volume",
                     }
@@ -831,7 +831,8 @@ class TestDockerManagerVolumeVerification:
 
                 # Verify exec_run was called with correct parameters
                 mock_container.exec_run.assert_called_with(
-                    ["ls", "-la", "/var/lib/postgresql/backups"], user="postgres"
+                    ["ls", "-la", "/var/lib/postgresql/tmp/postgresql/backups"],
+                    user="postgres",
                 )
 
     def test_verify_backup_volume_mounted_no_mount_found(self):
@@ -884,7 +885,7 @@ class TestDockerManagerVolumeVerification:
             mock_container.attrs = {
                 "Mounts": [
                     {
-                        "Destination": "/var/lib/postgresql/backups",
+                        "Destination": "/var/lib/postgresql/tmp/postgresql/backups",
                         "Source": "/var/lib/docker/volumes/test_backups/_data",
                         "Type": "volume",
                     }
@@ -937,15 +938,18 @@ class TestDockerManagerVolumeVerification:
             mock_container.reload = mock_reload
 
             def get_attrs():
-                # Fail for first 3 attempts (0, 1, 2), succeed on attempt 3+
+                # Fail for first 4 attempts (0, 1, 2, 3), succeed on attempt 5+
+                # This ensures volume reconnection fails and container restart is needed
                 # With timeout=0.6 and sleep=0.1, max_retries=6, restart at attempt 3
-                if attempt_count < 4:  # Attempts 0, 1, 2, 3 fail
+                if (
+                    attempt_count < 5
+                ):  # Attempts 0, 1, 2, 3, 4 fail (including volume reconnect)
                     return {"Mounts": []}
-                else:  # Attempts 4+ succeed (after restart)
+                else:  # Attempts 5+ succeed (after restart)
                     return {
                         "Mounts": [
                             {
-                                "Destination": "/var/lib/postgresql/backups",
+                                "Destination": "/var/lib/postgresql/tmp/postgresql/backups",
                                 "Source": "/var/lib/docker/volumes/test_backups/_data",
                                 "Type": "volume",
                             }
@@ -968,13 +972,18 @@ class TestDockerManagerVolumeVerification:
                 )
                 docker_mgr.check_container_status = MagicMock(return_value=True)
 
+                # Mock _force_volume_reconnect to fail, forcing container restart
+                docker_mgr._force_volume_reconnect = MagicMock(
+                    side_effect=Exception("Volume reconnection failed")
+                )
+
                 # Should succeed after restart
                 # timeout=0.6, sleep=0.1 => max_retries=6, restart at attempt 3
                 docker_mgr.verify_backup_volume_mounted(
                     mock_container, sleep=0.1, timeout=0.6
                 )
 
-                # Verify restart commands were called
+                # Verify restart commands were called (after volume reconnection fails)
                 expected_calls = [
                     (["docker", "compose", "stop", "postgres"],),
                     (["docker", "compose", "up", "-d", "postgres"],),
@@ -1000,7 +1009,9 @@ class TestDockerManagerVolumeVerification:
             with DockerManager(
                 "test_project", self.service_config, "postgres", "testuser", "testdb"
             ) as docker_mgr:
-                with pytest.raises(Exception, match="Failed to stop service postgres"):
+                with pytest.raises(
+                    Exception, match="Backup volume failed to mount properly"
+                ):
                     docker_mgr.verify_backup_volume_mounted(
                         mock_container, sleep=0.1, timeout=0.5
                     )

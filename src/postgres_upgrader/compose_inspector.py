@@ -66,9 +66,9 @@ class ServiceConfig:
             else None
         )
 
-    def get_backup_volume_path(self) -> Optional[str]:
-        """Get the path of the selected backup volume."""
-        return self.selected_backup_volume.path if self.selected_backup_volume else None
+    def get_backup_volume(self) -> Optional[VolumeMount]:
+        """Get the selected backup volume."""
+        return self.selected_backup_volume
 
     def is_configured_for_postgres_upgrade(self) -> bool:
         """
