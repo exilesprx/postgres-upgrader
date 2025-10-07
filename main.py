@@ -7,12 +7,9 @@ with automatic backup and verification.
 """
 
 import argparse
+from rich.console import Console
 import sys
-from postgres_upgrader.postgres import (
-    handle_upgrade_command,
-    handle_export_command,
-    handle_import_command,
-)
+from postgres_upgrader.postgres import Postgres
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -56,14 +53,16 @@ def main() -> None:
         parser.print_help()
         sys.exit(1)
 
+    console = Console()
+    postgres = Postgres(console)
     try:
         # Route to appropriate command handler
         if args.command == "upgrade":
-            handle_upgrade_command(args)
+            postgres.handle_upgrade_command(args)
         elif args.command == "export":
-            handle_export_command(args)
+            postgres.handle_export_command(args)
         elif args.command == "import":
-            handle_import_command(args)
+            postgres.handle_import_command(args)
         else:
             print(f"❌ Unknown command: {args.command}")
             parser.print_help()
