@@ -27,11 +27,13 @@ class Postgres:
         # TODO: Implement backup-only functionality
         # You might want to extract backup logic from run_postgres_upgrade
         # or add parameters to control the workflow
+        raise Exception("Export functionality not yet implemented")
 
     def handle_import_command(self, args) -> None:
         """Handle the import command."""
         # TODO: prompt user to select backup file
         # TODO: Implement import-only functionality
+        raise Exception("Import functionality not yet implemented")
 
     def handle_upgrade_command(self, args) -> None:
         """
