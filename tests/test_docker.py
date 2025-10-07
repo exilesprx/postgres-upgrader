@@ -1,11 +1,11 @@
 """
-Tests for Docker backup functionality.
+Tests for Docker operations and container management.
 """
 
 import pytest
 import subprocess
-from unittest.mock import MagicMock, patch, Mock
-import docker.errors
+import docker
+from unittest.mock import MagicMock, patch
 from postgres_upgrader import DockerManager, ServiceConfig, VolumeMount
 
 
@@ -440,10 +440,11 @@ class TestDockerManagerIntegration:
         self.service_config.selected_backup_volume = self.service_config.volumes[1]
 
     def test_full_postgres_upgrade_workflow_success(self):
-        """Test complete successful PostgreSQL upgrade workflow."""
+        """Test Docker operations used in PostgreSQL upgrade workflow."""
         with (
             patch("postgres_upgrader.docker.docker.from_env") as mock_docker,
             patch("postgres_upgrader.docker.subprocess.run") as mock_subprocess,
+            patch("time.sleep") as mock_sleep,  # Mock sleep to avoid delays
         ):
             mock_client = MagicMock()
             mock_docker.return_value = mock_client
@@ -465,9 +466,10 @@ class TestDockerManagerIntegration:
             }
             mock_client.containers.list.return_value = [mock_container]
 
-            # Mock successful command executions in sequence for verification workflow
-            mock_container.exec_run.side_effect = [
-                # get_database_statistics calls (original stats)
+            # Mock successful command executions for individual operations
+            # Provide extra mock responses to handle all the exec_run calls
+            mock_responses = [
+                # get_database_statistics calls
                 (0, b"5"),  # table count query
                 (0, b"1000"),  # row count estimate
                 (0, b"25 MB"),  # database size
@@ -479,43 +481,61 @@ class TestDockerManagerIntegration:
                 (0, b"5"),  # table count in backup
                 # verify_backup_volume_mounted call (ls command)
                 (0, b"directory listing"),  # backup volume accessibility check
+                # check_container_status call (before import)
+                (0, b"accepting connections"),  # pg_isready check
                 # import_data_from_backup call
                 (0, b"Data imported successfully"),
-                # get_database_statistics calls (post-import stats)
-                (0, b"5"),  # table count query (same as original)
-                (0, b"1000"),  # row count estimate (same as original)
-                (0, b"25 MB"),  # database size (same as original)
                 # update_collation_version call
                 (0, b"Collation version updated"),
+                # Extra responses for any additional calls
+                (0, b"success"),
+                (0, b"success"),
+                (0, b"success"),
+                (0, b"success"),
+                (0, b"success"),
             ]
+            mock_container.exec_run.side_effect = mock_responses
 
             with DockerManager(
                 "test_project", self.service_config, "postgres", "testuser", "testdb"
             ) as docker_mgr:
-                # Mock container health check for import
-                with patch.object(
-                    docker_mgr, "check_container_status", return_value=True
-                ):
-                    # Mock console to avoid actual output during tests
-                    mock_console = MagicMock()
+                # Test individual Docker operations that support the upgrade workflow
 
-                    try:
-                        docker_mgr.perform_postgres_upgrade(mock_console)
-                    except Exception as e:
-                        pytest.fail(
-                            f"perform_postgres_upgrade raised an exception: {e}"
-                        )
+                # Test database statistics collection
+                stats = docker_mgr.get_database_statistics()
+                assert stats["table_count"] == 5
+                assert stats["estimated_total_rows"] == 1000
+                assert stats["database_size"] == "25 MB"
 
-                    # Verify console.print was called (shows progress messages)
-                    assert mock_console.print.call_count > 0
+                # Test backup creation
+                backup_path = docker_mgr.create_postgres_backup()
+                assert backup_path is not None
 
-                    # Verify Docker commands were called
-                    assert (
-                        mock_subprocess.call_count >= 2
-                    )  # At least stop and volume operations
+                # Test backup verification
+                backup_stats = docker_mgr.verify_backup_integrity(backup_path)
+                assert backup_stats["file_size_bytes"] == 12345
+                assert backup_stats["estimated_table_count"] == 5
 
-                    # Verify container operations (now includes verification calls)
-                    assert mock_container.exec_run.call_count >= 10
+                # Test service container management
+                container = docker_mgr.start_service_container()
+                assert container is not None
+
+                # Test backup volume verification (with fast timeout)
+                docker_mgr.verify_backup_volume_mounted(
+                    container=container, sleep=0.1, timeout=1
+                )
+
+                # Test data import
+                docker_mgr.import_data_from_backup(backup_path)
+
+                # Test collation update
+                docker_mgr.update_collation_version()
+
+                # Verify Docker operations were called
+                assert mock_subprocess.call_count >= 1  # Service container start
+                assert (
+                    mock_container.exec_run.call_count >= 11
+                )  # All database operations (flexible count)
 
     def test_backup_and_import_workflow(self):
         """Test backup creation followed by data import."""
@@ -1120,3 +1140,140 @@ class TestDockerManagerVolumeVerification:
                 # Should have called sleep 2 times (6//2 = 3 attempts, 2 sleeps)
                 assert mock_sleep.call_count == 2
                 mock_sleep.assert_called_with(2)
+
+
+class TestDockerManagerServiceLifecycle:
+    """Test DockerManager service lifecycle methods."""
+
+    def setup_method(self):
+        """Set up test fixtures."""
+        self.service_config = ServiceConfig(
+            name="postgres",
+            volumes=[
+                VolumeMount(
+                    name="data",
+                    path="/var/lib/postgresql/data",
+                    raw="data:/var/lib/postgresql/data",
+                    resolved_name="test_data",
+                ),
+                VolumeMount(
+                    name="backups",
+                    path="/tmp/postgresql/backups",
+                    raw="backups:/tmp/postgresql/backups",
+                    resolved_name="test_backups",
+                ),
+            ],
+        )
+        self.service_config.selected_main_volume = self.service_config.volumes[0]
+        self.service_config.selected_backup_volume = self.service_config.volumes[1]
+
+    @patch("postgres_upgrader.docker.subprocess.run")
+    def test_stop_service_container(self, mock_subprocess):
+        """Test stopping service container."""
+        mock_subprocess.return_value = MagicMock(returncode=0)
+
+        with DockerManager(
+            "test_project", self.service_config, "postgres", "testuser", "testdb"
+        ) as docker_mgr:
+            docker_mgr.stop_service_container()
+
+            mock_subprocess.assert_called_once()
+            call_args = mock_subprocess.call_args[0][0]
+            assert "docker" in call_args
+            assert "compose" in call_args
+            assert "stop" in call_args
+            assert "postgres" in call_args
+
+    @patch("postgres_upgrader.docker.subprocess.run")
+    def test_remove_service_container(self, mock_subprocess):
+        """Test removing service container."""
+        mock_subprocess.return_value = MagicMock(returncode=0)
+
+        with DockerManager(
+            "test_project", self.service_config, "postgres", "testuser", "testdb"
+        ) as docker_mgr:
+            docker_mgr.remove_service_container()
+
+            mock_subprocess.assert_called_once()
+            call_args = mock_subprocess.call_args[0][0]
+            assert "docker" in call_args
+            assert "compose" in call_args
+            assert "rm" in call_args
+            assert "postgres" in call_args
+
+    @patch("postgres_upgrader.docker.subprocess.run")
+    def test_update_service_container(self, mock_subprocess):
+        """Test updating service container."""
+        mock_subprocess.return_value = MagicMock(returncode=0)
+
+        with DockerManager(
+            "test_project", self.service_config, "postgres", "testuser", "testdb"
+        ) as docker_mgr:
+            docker_mgr.update_service_container()
+
+            mock_subprocess.assert_called_once()
+            call_args = mock_subprocess.call_args[0][0]
+            assert "docker" in call_args
+            assert "compose" in call_args
+            assert "pull" in call_args
+            assert "postgres" in call_args
+
+    @patch("postgres_upgrader.docker.subprocess.run")
+    def test_build_service_container(self, mock_subprocess):
+        """Test building service container."""
+        mock_subprocess.return_value = MagicMock(returncode=0)
+
+        with DockerManager(
+            "test_project", self.service_config, "postgres", "testuser", "testdb"
+        ) as docker_mgr:
+            docker_mgr.build_service_container()
+
+            mock_subprocess.assert_called_once()
+            call_args = mock_subprocess.call_args[0][0]
+            assert "docker" in call_args
+            assert "compose" in call_args
+            assert "build" in call_args
+            assert "postgres" in call_args
+
+    @patch("postgres_upgrader.docker.subprocess.run")
+    def test_remove_service_main_volume(self, mock_subprocess):
+        """Test removing service main volume."""
+        mock_subprocess.return_value = MagicMock(returncode=0)
+
+        with DockerManager(
+            "test_project", self.service_config, "postgres", "testuser", "testdb"
+        ) as docker_mgr:
+            docker_mgr.remove_service_main_volume()
+
+            mock_subprocess.assert_called_once()
+            call_args = mock_subprocess.call_args[0][0]
+            assert "docker" in call_args
+            assert "volume" in call_args
+            assert "rm" in call_args
+            assert "test_data" in call_args  # resolved name of main volume
+
+    @patch("postgres_upgrader.docker.subprocess.run")
+    def test_service_lifecycle_error_handling(self, mock_subprocess):
+        """Test service lifecycle methods handle subprocess errors."""
+        # Simulate subprocess.CalledProcessError
+        mock_subprocess.side_effect = subprocess.CalledProcessError(
+            1, ["docker", "compose"]
+        )
+
+        with DockerManager(
+            "test_project", self.service_config, "postgres", "testuser", "testdb"
+        ) as docker_mgr:
+            with pytest.raises(Exception, match="Failed to stop service"):
+                docker_mgr.stop_service_container()
+
+            with pytest.raises(Exception, match="Failed to remove service"):
+                docker_mgr.remove_service_container()
+
+            with pytest.raises(Exception, match="Failed to update service"):
+                docker_mgr.update_service_container()
+
+            with pytest.raises(Exception, match="Failed to build service"):
+                docker_mgr.build_service_container()
+
+            with pytest.raises(Exception, match="Failed to remove volume"):
+                docker_mgr.remove_service_main_volume()

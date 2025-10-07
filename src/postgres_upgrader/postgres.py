@@ -15,41 +15,205 @@ from . import (
 )
 
 if TYPE_CHECKING:
-    from .compose_inspector import DockerComposeConfig
+    from .compose_inspector import DockerComposeConfig, ServiceConfig
 
 
 class Postgres:
+    """
+    PostgreSQL upgrade orchestration class.
+
+    This class handles the business logic for PostgreSQL database operations
+    including export, import, and full upgrade workflows using Docker Compose.
+    """
+
     def __init__(self, console: Console) -> None:
+        """
+        Initialize the Postgres orchestrator.
+
+        Args:
+            console: Rich Console instance for formatted output
+        """
         self.console = console
 
     def handle_export_command(self, args) -> None:
-        """Handle the export command."""
-        # TODO: Implement backup-only functionality
-        # You might want to extract backup logic from run_postgres_upgrade
-        # or add parameters to control the workflow
-        raise Exception("Export functionality not yet implemented")
+        """
+        Handle the export command to create a PostgreSQL backup.
+
+        Creates a backup of the current PostgreSQL database, verifies its
+        integrity, and displays statistics about the backup process.
+
+        Args:
+            args: Command line arguments (currently unused)
+
+        Raises:
+            Exception: If service is not configured for PostgreSQL export
+                      or if any step in the export process fails
+        """
+        compose_config, selected_service, container_user, user, database = (
+            self._get_selections()
+        )
+
+        if not selected_service.is_configured_for_postgres_upgrade():
+            raise Exception("Service must have selected volumes for PostgreSQL export")
+
+        with DockerManager(
+            compose_config.name, selected_service, container_user, user, database
+        ) as docker_mgr:
+            self.console.print("  Collecting database statistics...")
+            stats = docker_mgr.get_database_statistics()
+            self.console.print(
+                f"   Current database: {stats['table_count']} tables, {stats['database_size']}"
+            )
+            path = docker_mgr.create_postgres_backup()
+            self.console.print(f"Backup created successfully: {path}")
+            self.console.print("  Verifying backup integrity...")
+            backup_stats = docker_mgr.verify_backup_integrity(path)
+            self.console.print(
+                f"   Backup verified: {backup_stats['file_size_bytes']} bytes, ~{backup_stats['estimated_table_count']} tables",
+                style="green",
+            )
 
     def handle_import_command(self, args) -> None:
-        """Handle the import command."""
-        # TODO: prompt user to select backup file
-        # TODO: Implement import-only functionality
-        raise Exception("Import functionality not yet implemented")
+        """
+        Handle the import command to restore data from a PostgreSQL backup.
+
+        Starts the PostgreSQL service container, verifies backup volume
+        mounting, imports data from backup, and updates collation version.
+
+        Args:
+            args: Command line arguments (currently unused)
+
+        Raises:
+            Exception: If service is not configured for PostgreSQL import
+                      or if any step in the import process fails
+        """
+        compose_config, selected_service, container_user, user, database = (
+            self._get_selections()
+        )
+
+        if not selected_service.is_configured_for_postgres_upgrade():
+            raise Exception("Service must have selected volumes for PostgreSQL import")
+
+        with DockerManager(
+            compose_config.name, selected_service, container_user, user, database
+        ) as docker_mgr:
+            self.console.print("  Starting service container...")
+            container = docker_mgr.start_service_container()
+            # TODO: prompt user to select backup file
+            self.console.print("  Verifying backup volume is mounted...")
+            docker_mgr.verify_backup_volume_mounted(container=container)
+
+            self.console.print(
+                f"  Importing data from backup into database '{database}'..."
+            )
+            docker_mgr.import_data_from_backup("")
+            docker_mgr.update_collation_version()
+            self.console.print("  Import completed successfully!", style="bold green")
 
     def handle_upgrade_command(self, args) -> None:
         """
         Execute the complete PostgreSQL upgrade workflow.
 
-        This function orchestrates the entire upgrade process:
-        1. Parse Docker Compose configuration
-        2. Identify and select services with volumes
-        3. Get PostgreSQL credentials
-        4. Prompt for container user
-        5. Execute the upgrade workflow
+        This method performs the full PostgreSQL upgrade sequence:
+        1. Get baseline database statistics
+        2. Create backup of current database
+        3. Verify backup integrity
+        4. Stop the PostgreSQL service container
+        5. Update and build the service with new PostgreSQL version
+        6. Remove the old data volume
+        7. Start the service with new PostgreSQL version
+        8. Verify backup volume is mounted
+        9. Import data from the backup into the new database
+        10. Verify import success
+        11. Update collation version for the database
+
+        Args:
+            args: Command line arguments (currently unused)
 
         Raises:
-            Exception: If any step in the upgrade process fails
+            Exception: If service is not configured for PostgreSQL upgrade
+                      or if any step in the upgrade process fails
         """
+        compose_config, selected_service, container_user, user, database = (
+            self._get_selections()
+        )
 
+        if not selected_service.is_configured_for_postgres_upgrade():
+            raise Exception("Service must have selected volumes for PostgreSQL upgrade")
+
+        # Execute the upgrade workflow
+        with DockerManager(
+            compose_config.name, selected_service, container_user, user, database
+        ) as docker_mgr:
+            self.console.print("  Collecting database statistics...")
+            original_stats = docker_mgr.get_database_statistics()
+            self.console.print(
+                f"   Current database: {original_stats['table_count']} tables, {original_stats['database_size']}"
+            )
+            path = docker_mgr.create_postgres_backup()
+            self.console.print(f"Backup created successfully: {path}")
+            self.console.print("  Verifying backup integrity...")
+            backup_stats = docker_mgr.verify_backup_integrity(path)
+            self.console.print(
+                f"   Backup verified: {backup_stats['file_size_bytes']} bytes, ~{backup_stats['estimated_table_count']} tables",
+                style="green",
+            )
+
+            docker_mgr.stop_service_container()
+            docker_mgr.remove_service_container()
+            docker_mgr.update_service_container()
+            docker_mgr.build_service_container()
+            docker_mgr.remove_service_main_volume()
+
+            self.console.print("  Starting service container...")
+            container = docker_mgr.start_service_container()
+
+            self.console.print("  Verifying backup volume is mounted...")
+            docker_mgr.verify_backup_volume_mounted(container=container)
+
+            self.console.print(
+                f"  Importing data from backup into database '{database}'..."
+            )
+            docker_mgr.import_data_from_backup(path)
+
+            current_stats = docker_mgr.get_database_statistics()
+            verification_result = self._verify_import_success(
+                original_stats, current_stats, backup_stats
+            )
+            self._display_verification_results(verification_result)
+            if verification_result["success"] is False:
+                raise Exception(
+                    "PostgreSQL upgrade verification failed. Please review."
+                )
+
+            docker_mgr.update_collation_version()
+            self.console.print(
+                "  PostgreSQL upgrade completed successfully!", style="bold green"
+            )
+
+    def _get_selections(
+        self,
+    ) -> tuple["DockerComposeConfig", "ServiceConfig", str, str, str]:
+        """
+        Get user selections and credentials for the upgrade process.
+
+        Parses Docker Compose configuration, prompts user to select
+        service volumes, retrieves PostgreSQL credentials, and gets
+        container user information.
+
+        Returns:
+            tuple: A 5-tuple containing:
+                - DockerComposeConfig: Parsed Docker Compose configuration
+                - ServiceConfig: Selected service configuration
+                - str: Container user for operations
+                - str: PostgreSQL username
+                - str: PostgreSQL database name
+
+        Raises:
+            Exception: If Docker Compose configuration cannot be parsed,
+                      no volumes are found, service selection is cancelled,
+                      credentials cannot be found, or container user is invalid
+        """
         try:
             compose_config = parse_docker_compose()
         except Exception as e:
@@ -58,33 +222,25 @@ class Postgres:
                 "Make sure you're in a directory with a docker-compose.yml file and Docker Compose is installed."
             )
 
-        # Identify and select service with volumes
         selected_service = identify_service_volumes(compose_config)
         if not selected_service:
             raise Exception("No volumes found or selection cancelled")
 
-        # Get service name
         service_name = selected_service.name
         if not service_name:
             raise Exception("Service name not found in selection")
 
-        # Get PostgreSQL credentials from Docker Compose configuration
         user, database = self._get_credentials(compose_config, service_name)
         if not user or not database:
             raise Exception(
                 "Could not find PostgreSQL credentials in Docker Compose configuration"
             )
 
-        # Prompt for container user
         container_user = prompt_container_user()
         if not container_user:
             raise Exception("A valid container user is required to proceed")
 
-        # Execute the upgrade workflow
-        with DockerManager(
-            compose_config.name, selected_service, container_user, user, database
-        ) as docker_mgr:
-            docker_mgr.perform_postgres_upgrade(self.console)
+        return compose_config, selected_service, container_user, user, database
 
     def _get_credentials(
         self, compose_config: "DockerComposeConfig", service_name: str
@@ -92,9 +248,149 @@ class Postgres:
         """
         Get PostgreSQL credentials from resolved Docker Compose configuration.
 
+        Extracts PostgreSQL username and database name from the Docker Compose
+        environment variables or configuration for the specified service.
+
+        Args:
+            compose_config: The Docker Compose configuration object
+            service_name: Name of the service to get credentials for
+
         Returns:
-            tuple: (user, database) or (None, None) if not found
+            tuple: A 2-tuple containing:
+                - Optional[str]: PostgreSQL username (None if not found)
+                - Optional[str]: PostgreSQL database name (None if not found)
         """
         user = compose_config.get_postgres_user(service_name)
         database = compose_config.get_postgres_db(service_name)
         return user, database
+
+    def _verify_import_success(
+        self, original_stats: dict, current_stats: dict, backup_stats: dict
+    ) -> dict:
+        """
+        Verify that data import was successful by comparing statistics.
+
+        Compares current database state against both original database statistics
+        and backup file statistics to ensure data was properly restored. Performs
+        various sanity checks including table count validation, backup size
+        verification, and row count consistency checks.
+
+        Args:
+            original_stats: Statistics from the original database before backup
+                           (from DockerManager.get_database_statistics())
+            current_stats: Statistics from the current database after import
+                          (from DockerManager.get_database_statistics())
+            backup_stats: Statistics from backup file verification
+                         (from DockerManager.verify_backup_integrity())
+
+        Returns:
+            dict: Verification results containing:
+                - success (bool): Whether verification passed
+                - warnings (list): List of warning messages
+                - current_stats (dict): Current database statistics
+                - original_stats (dict): Original database statistics
+                - backup_stats (dict): Backup file statistics
+                - tables_restored (int): Number of tables in restored database
+                - original_tables (int): Number of tables in original database
+                - estimated_rows (int): Estimated total rows in restored database
+                - database_size (str): Human-readable database size
+
+        Note:
+            This method does not raise exceptions for verification failures.
+            Instead, it returns a result dictionary with success=False and
+            detailed warning messages for the caller to handle.
+        """
+
+        verification_warnings = []
+        success = True
+
+        if current_stats["table_count"] == 0:
+            verification_warnings.append("No tables found in restored database")
+            success = False
+
+        # Compare table counts (should match or be close)
+        original_tables = original_stats.get("table_count", 0)
+        current_tables = current_stats["table_count"]
+
+        if abs(original_tables - current_tables) > 1:  # Allow for small differences
+            verification_warnings.append(
+                f"Table count mismatch. Original: {original_tables}, Current: {current_tables}"
+            )
+            success = False
+
+        # Use backup_stats to verify backup was substantial enough
+        backup_table_count = backup_stats.get("estimated_table_count", 0)
+        if original_tables > 0 and backup_table_count == 0:
+            verification_warnings.append(
+                "Original database had tables but backup appears to contain no table definitions"
+            )
+            success = False
+
+        # Verify backup file wasn't suspiciously small
+        backup_size = backup_stats.get("file_size_bytes", 0)
+        if original_tables > 0 and backup_size < 1000:  # Less than 1KB seems too small
+            verification_warnings.append(
+                f"Backup file is suspiciously small ({backup_size} bytes) for a database with {original_tables} tables"
+            )
+            success = False
+
+        if (
+            current_stats["estimated_total_rows"] == 0
+            and original_stats.get("estimated_total_rows", 0) > 0
+        ):
+            verification_warnings.append(
+                "No rows found in restored database, but original had data"
+            )
+            success = False
+
+        return {
+            "success": success,
+            "warnings": verification_warnings,
+            "current_stats": current_stats,
+            "original_stats": original_stats,
+            "backup_stats": backup_stats,
+            "tables_restored": current_tables,
+            "original_tables": original_tables,
+            "estimated_rows": current_stats["estimated_total_rows"],
+            "database_size": current_stats["database_size"],
+        }
+
+    def _display_verification_results(self, data: dict):
+        """
+        Display verification results to the user in a formatted manner.
+
+        Outputs either success information with database statistics or
+        failure warnings with detailed error messages using Rich console
+        formatting for better readability.
+
+        Args:
+            data: Verification results dictionary from _verify_import_success()
+                 Expected keys:
+                 - success (bool): Whether verification passed
+                 - warnings (list): List of warning messages (if success=False)
+                 - tables_restored (int): Number of tables restored
+                 - original_tables (int): Number of original tables
+                 - estimated_rows (int): Estimated total rows
+                 - database_size (str): Human-readable database size
+
+        Note:
+            This method handles its own console output and does not return
+            any values. For failed verifications, warnings are displayed
+            in red styling.
+        """
+        if not data["success"]:
+            for warning in data["warnings"]:
+                self.console.print(f"     WARNING: {warning}", style="red")
+
+            self.console.print(
+                "Import verification failed - data may not have been restored correctly",
+                style="bold red",
+            )
+            return
+
+        self.console.print("     Import verification successful:")
+        self.console.print(
+            f"      Tables: {data['tables_restored']} (original: {data['original_tables']})"
+        )
+        self.console.print(f"      Estimated rows: {data['estimated_rows']}")
+        self.console.print(f"      Database size: {data['database_size']}")

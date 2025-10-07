@@ -48,7 +48,6 @@ def main() -> None:
     parser = create_parser()
     args = parser.parse_args()
 
-    # If no command specified, show help
     if not args.command:
         parser.print_help()
         sys.exit(1)
@@ -56,7 +55,6 @@ def main() -> None:
     console = Console()
     postgres = Postgres(console)
     try:
-        # Route to appropriate command handler
         if args.command == "upgrade":
             postgres.handle_upgrade_command(args)
         elif args.command == "export":
@@ -64,15 +62,15 @@ def main() -> None:
         elif args.command == "import":
             postgres.handle_import_command(args)
         else:
-            print(f"❌ Unknown command: {args.command}")
+            console.print(f"❌ Unknown command: {args.command}", style="bold red")
             parser.print_help()
             sys.exit(1)
 
     except KeyboardInterrupt:
-        print("\n❌ Operation cancelled by user")
+        console.print("\n❌ Operation cancelled by user", style="bold red")
         sys.exit(1)
     except Exception as e:
-        print(f"❌ Error: {e}")
+        console.print(f"❌ Error: {e}", style="bold red")
         sys.exit(1)
 
 

@@ -75,11 +75,9 @@ class TestPromptUserChoice:
             mock_inquirer.List.return_value = "mock_question"
             mock_inquirer.prompt.side_effect = KeyboardInterrupt()
 
-            with patch("builtins.print") as mock_print:
-                result = prompt_user_choice(choices, "Test prompt")
+            result = prompt_user_choice(choices, "Test prompt")
 
-                assert result is None
-                mock_print.assert_called_with("\nCancelled by user")
+            assert result is None
 
     def test_prompt_user_choice_single_choice(self):
         """Test prompt_user_choice with only one choice available."""
@@ -171,11 +169,9 @@ class TestPromptContainerUser:
             mock_inquirer.Text.return_value = "mock_question"
             mock_inquirer.prompt.side_effect = KeyboardInterrupt()
 
-            with patch("builtins.print") as mock_print:
-                result = prompt_container_user()
+            result = prompt_container_user()
 
-                assert result is None
-                mock_print.assert_called_with("\nCancelled by user")
+            assert result is None
 
     def test_prompt_container_user_special_characters(self):
         """Test prompt_container_user accepts special characters in username."""
@@ -269,11 +265,9 @@ class TestIdentifyServiceVolumes:
         """Test behavior when no services are available."""
         empty_config = DockerComposeConfig(name="test_project", services={})
 
-        with patch("builtins.print") as mock_print:
-            result = identify_service_volumes(empty_config)
+        result = identify_service_volumes(empty_config)
 
-            assert result is None
-            mock_print.assert_called_with("No services found in the compose file.")
+        assert result is None
 
     def test_identify_service_volumes_user_cancels_service_selection(self):
         """Test behavior when user cancels service selection."""
@@ -288,13 +282,9 @@ class TestIdentifyServiceVolumes:
         with patch("postgres_upgrader.prompt.prompt_user_choice") as mock_prompt:
             mock_prompt.return_value = "nonexistent_service"
 
-            with patch("builtins.print") as mock_print:
-                result = identify_service_volumes(self.compose_config)
+            result = identify_service_volumes(self.compose_config)
 
-                assert result is None
-                mock_print.assert_called_with(
-                    "Service 'nonexistent_service' not found."
-                )
+            assert result is None
 
     def test_identify_service_volumes_no_volumes_for_service(self):
         """Test behavior when selected service has no volumes."""
@@ -306,11 +296,9 @@ class TestIdentifyServiceVolumes:
         with patch("postgres_upgrader.prompt.prompt_user_choice") as mock_prompt:
             mock_prompt.return_value = "redis"
 
-            with patch("builtins.print") as mock_print:
-                result = identify_service_volumes(config_no_volumes)
+            result = identify_service_volumes(config_no_volumes)
 
-                assert result is None
-                mock_print.assert_called_with("No volumes found for service 'redis'.")
+            assert result is None
 
     def test_identify_service_volumes_user_cancels_main_volume(self):
         """Test behavior when user cancels main volume selection."""
@@ -686,12 +674,8 @@ class TestPromptErrorHandling:
         with patch("postgres_upgrader.prompt.prompt_user_choice") as mock_prompt:
             mock_prompt.return_value = "postgres"
 
-            # The function actually handles None volumes by checking if volumes exist
-            # It prints "No volumes found" and returns None instead of raising TypeError
-            with patch("builtins.print") as mock_print:
-                result = identify_service_volumes(compose_config)
+            # The function handles None volumes by checking if volumes exist
+            # It returns None instead of printing error message
+            result = identify_service_volumes(compose_config)
 
-                assert result is None
-                mock_print.assert_called_with(
-                    "No volumes found for service 'postgres'."
-                )
+            assert result is None

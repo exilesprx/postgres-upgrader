@@ -35,15 +35,51 @@ class TestHandleExportCommand:
         self.console = Console()
         self.postgres = Postgres(self.console)
 
-    def test_handle_export_command_placeholder(self):
-        """Test that handle_export_command method exists and can be called."""
-        # Currently just a placeholder, so test that it doesn't raise an exception
-        args = Mock()
-        try:
-            self.postgres.handle_export_command(args)
-        except NotImplementedError:
-            # This is expected for placeholder methods
-            pass
+    @patch("postgres_upgrader.postgres.DockerManager")
+    @patch("postgres_upgrader.postgres.prompt_container_user")
+    @patch("postgres_upgrader.postgres.identify_service_volumes")
+    @patch("postgres_upgrader.postgres.parse_docker_compose")
+    def test_handle_export_command_successful_workflow(
+        self, mock_parse, mock_identify, mock_prompt, mock_docker_manager
+    ):
+        """Test that handle_export_command executes successfully."""
+        # Setup mocks
+        mock_compose_config = Mock()
+        mock_compose_config.name = "test_project"
+        mock_parse.return_value = mock_compose_config
+
+        mock_service = Mock()
+        mock_service.name = "postgres"
+        mock_service.is_configured_for_postgres_upgrade.return_value = True
+        mock_identify.return_value = mock_service
+
+        mock_prompt.return_value = "postgres"
+
+        # Mock DockerManager and its methods
+        mock_docker_instance = Mock()
+        mock_docker_instance.get_database_statistics.return_value = {
+            "table_count": 5,
+            "database_size": "25 MB",
+        }
+        mock_docker_instance.create_postgres_backup.return_value = "/tmp/backup.sql"
+        mock_docker_instance.verify_backup_integrity.return_value = {
+            "file_size_bytes": 12345,
+            "estimated_table_count": 5,
+        }
+        mock_docker_manager.return_value.__enter__.return_value = mock_docker_instance
+
+        with patch.object(
+            self.postgres, "_get_credentials", return_value=("testuser", "testdb")
+        ):
+            # Should not raise any exceptions
+            self.postgres.handle_export_command(Mock())
+
+        # Verify the expected calls were made
+        mock_docker_instance.get_database_statistics.assert_called_once()
+        mock_docker_instance.create_postgres_backup.assert_called_once()
+        mock_docker_instance.verify_backup_integrity.assert_called_once_with(
+            "/tmp/backup.sql"
+        )
 
 
 class TestHandleImportCommand:
@@ -54,15 +90,45 @@ class TestHandleImportCommand:
         self.console = Console()
         self.postgres = Postgres(self.console)
 
-    def test_handle_import_command_placeholder(self):
-        """Test that handle_import_command method exists and can be called."""
-        # Currently just a placeholder, so test that it doesn't raise an exception
-        args = Mock()
-        try:
-            self.postgres.handle_import_command(args)
-        except NotImplementedError:
-            # This is expected for placeholder methods
-            pass
+    @patch("postgres_upgrader.postgres.DockerManager")
+    @patch("postgres_upgrader.postgres.prompt_container_user")
+    @patch("postgres_upgrader.postgres.identify_service_volumes")
+    @patch("postgres_upgrader.postgres.parse_docker_compose")
+    def test_handle_import_command_successful_workflow(
+        self, mock_parse, mock_identify, mock_prompt, mock_docker_manager
+    ):
+        """Test that handle_import_command executes successfully."""
+        # Setup mocks
+        mock_compose_config = Mock()
+        mock_compose_config.name = "test_project"
+        mock_parse.return_value = mock_compose_config
+
+        mock_service = Mock()
+        mock_service.name = "postgres"
+        mock_service.is_configured_for_postgres_upgrade.return_value = True
+        mock_identify.return_value = mock_service
+
+        mock_prompt.return_value = "postgres"
+
+        # Mock DockerManager and its methods
+        mock_docker_instance = Mock()
+        mock_container = Mock()
+        mock_docker_instance.start_service_container.return_value = mock_container
+        mock_docker_manager.return_value.__enter__.return_value = mock_docker_instance
+
+        with patch.object(
+            self.postgres, "_get_credentials", return_value=("testuser", "testdb")
+        ):
+            # Should not raise any exceptions
+            self.postgres.handle_import_command(Mock())
+
+        # Verify the expected calls were made
+        mock_docker_instance.start_service_container.assert_called_once()
+        mock_docker_instance.verify_backup_volume_mounted.assert_called_once_with(
+            container=mock_container
+        )
+        mock_docker_instance.import_data_from_backup.assert_called_once_with("")
+        mock_docker_instance.update_collation_version.assert_called_once()
 
 
 class TestHandleUpgradeCommand:
@@ -233,12 +299,25 @@ class TestHandleUpgradeCommand:
 
         mock_service = Mock()
         mock_service.name = "postgres"
+        mock_service.is_configured_for_postgres_upgrade.return_value = True
         mock_identify.return_value = mock_service
 
         mock_prompt.return_value = "postgres"
 
-        # Mock DockerManager context manager
+        # Mock DockerManager context manager with proper return values
         mock_docker_instance = Mock()
+        mock_docker_instance.get_database_statistics.return_value = {
+            "table_count": 5,
+            "database_size": "25 MB",
+            "estimated_total_rows": 1000,
+        }
+        mock_docker_instance.create_postgres_backup.return_value = "/tmp/backup.sql"
+        mock_docker_instance.verify_backup_integrity.return_value = {
+            "file_size_bytes": 12345,
+            "estimated_table_count": 5,
+        }
+        mock_container = Mock()
+        mock_docker_instance.start_service_container.return_value = mock_container
         mock_docker_manager.return_value.__enter__.return_value = mock_docker_instance
 
         with patch.object(
@@ -252,10 +331,15 @@ class TestHandleUpgradeCommand:
             "test_project", mock_service, "postgres", "testuser", "testdb"
         )
 
-        # Verify perform_postgres_upgrade was called
-        mock_docker_instance.perform_postgres_upgrade.assert_called_once_with(
-            self.console
+        # Verify the upgrade workflow was executed
+        mock_docker_instance.get_database_statistics.assert_called()
+        mock_docker_instance.create_postgres_backup.assert_called_once()
+        mock_docker_instance.stop_service_container.assert_called_once()
+        mock_docker_instance.start_service_container.assert_called_once()
+        mock_docker_instance.import_data_from_backup.assert_called_once_with(
+            "/tmp/backup.sql"
         )
+        mock_docker_instance.update_collation_version.assert_called_once()
 
     @patch("postgres_upgrader.postgres.DockerManager")
     @patch("postgres_upgrader.postgres.prompt_container_user")
@@ -272,13 +356,19 @@ class TestHandleUpgradeCommand:
 
         mock_service = Mock()
         mock_service.name = "postgres"
+        mock_service.is_configured_for_postgres_upgrade.return_value = True
         mock_identify.return_value = mock_service
 
         mock_prompt.return_value = "postgres"
 
-        # Mock DockerManager to raise an exception
+        # Mock DockerManager to raise an exception during backup creation
         mock_docker_instance = Mock()
-        mock_docker_instance.perform_postgres_upgrade.side_effect = Exception(
+        mock_docker_instance.get_database_statistics.return_value = {
+            "table_count": 5,
+            "database_size": "25 MB",
+            "estimated_total_rows": 1000,
+        }
+        mock_docker_instance.create_postgres_backup.side_effect = Exception(
             "Docker upgrade failed"
         )
         mock_docker_manager.return_value.__enter__.return_value = mock_docker_instance
@@ -388,31 +478,42 @@ class TestPostgresIntegration:
         # Create realistic service config
         mock_service = Mock()
         mock_service.name = "database"
+        mock_service.is_configured_for_postgres_upgrade.return_value = True
         mock_identify.return_value = mock_service
 
         mock_prompt.return_value = "postgres"
 
-        # Mock successful DockerManager execution
+        # Mock successful DockerManager execution with proper return values
         mock_docker_instance = Mock()
+        mock_docker_instance.get_database_statistics.return_value = {
+            "table_count": 15,
+            "database_size": "150 MB",
+            "estimated_total_rows": 50000,
+        }
+        mock_docker_instance.create_postgres_backup.return_value = (
+            "/tmp/my_postgres_project_backup.sql"
+        )
+        mock_docker_instance.verify_backup_integrity.return_value = {
+            "file_size_bytes": 1024 * 1024 * 10,
+            "estimated_table_count": 15,
+        }
+        mock_container = Mock()
+        mock_docker_instance.start_service_container.return_value = mock_container
         mock_docker_manager.return_value.__enter__.return_value = mock_docker_instance
 
         # Execute the workflow
         self.postgres.handle_upgrade_command(Mock())
 
-        # Verify the entire chain was called correctly
-        mock_parse.assert_called_once()
-        mock_identify.assert_called_once_with(mock_compose_config)
-        mock_prompt.assert_called_once()
-        mock_docker_manager.assert_called_once_with(
-            "my_postgres_project",
-            mock_service,
-            "postgres",
-            "postgres_user",
-            "my_database",
-        )
-        mock_docker_instance.perform_postgres_upgrade.assert_called_once_with(
-            self.console
-        )
+        # Verify complete workflow execution
+        assert (
+            mock_docker_instance.get_database_statistics.call_count == 2
+        )  # Initial + verification
+        mock_docker_instance.create_postgres_backup.assert_called_once()
+        mock_docker_instance.verify_backup_integrity.assert_called_once()
+        mock_docker_instance.stop_service_container.assert_called_once()
+        mock_docker_instance.start_service_container.assert_called_once()
+        mock_docker_instance.import_data_from_backup.assert_called_once()
+        mock_docker_instance.update_collation_version.assert_called_once()
 
     @patch("postgres_upgrader.postgres.parse_docker_compose")
     def test_error_propagation_from_parse_docker_compose(self, mock_parse):
@@ -469,12 +570,25 @@ class TestPostgresIntegration:
 
         mock_service = Mock()
         mock_service.name = "postgres"
+        mock_service.is_configured_for_postgres_upgrade.return_value = True
         mock_identify.return_value = mock_service
 
         mock_prompt.return_value = "   "  # Whitespace only
 
         # Mock DockerManager since whitespace passes the truthiness check
         mock_docker_instance = Mock()
+        mock_docker_instance.get_database_statistics.return_value = {
+            "table_count": 5,
+            "database_size": "25 MB",
+            "estimated_total_rows": 1000,
+        }
+        mock_docker_instance.create_postgres_backup.return_value = "/tmp/backup.sql"
+        mock_docker_instance.verify_backup_integrity.return_value = {
+            "file_size_bytes": 12345,
+            "estimated_table_count": 5,
+        }
+        mock_container = Mock()
+        mock_docker_instance.start_service_container.return_value = mock_container
         mock_docker_manager.return_value.__enter__.return_value = mock_docker_instance
 
         with patch.object(
@@ -488,3 +602,106 @@ class TestPostgresIntegration:
             "test_project", mock_service, "   ", "testuser", "testdb"
         )
 
+
+class TestPostgresHelperMethods:
+    """Test Postgres helper methods."""
+
+    def setup_method(self):
+        """Set up test fixtures."""
+        self.console = Console()
+        self.postgres = Postgres(self.console)
+
+    def test_verify_import_success_successful(self):
+        """Test _verify_import_success with successful import."""
+        # Mock successful import verification data
+        original_stats = {
+            "table_count": 5,
+            "database_size": "25 MB",
+            "estimated_total_rows": 1000,
+        }
+
+        current_stats = {
+            "table_count": 5,
+            "database_size": "25 MB",
+            "estimated_total_rows": 1000,
+        }
+
+        backup_stats = {"file_size_bytes": 12345, "estimated_table_count": 5}
+
+        # Should not raise any exceptions for matching stats
+        result = self.postgres._verify_import_success(
+            original_stats, current_stats, backup_stats
+        )
+        assert result["success"] is True
+
+    def test_verify_import_success_table_count_mismatch(self):
+        """Test _verify_import_success with table count mismatch."""
+        original_stats = {
+            "table_count": 5,
+            "database_size": "25 MB",
+            "estimated_total_rows": 1000,
+        }
+
+        current_stats = {
+            "table_count": 2,  # Significantly different table count (diff > 1)
+            "database_size": "25 MB",
+            "estimated_total_rows": 1000,
+        }
+
+        backup_stats = {"file_size_bytes": 12345, "estimated_table_count": 5}
+
+        result = self.postgres._verify_import_success(
+            original_stats, current_stats, backup_stats
+        )
+        assert result["success"] is False
+        assert any("Table count mismatch" in warning for warning in result["warnings"])
+
+    def test_verify_import_success_significant_row_count_difference(self):
+        """Test _verify_import_success with significant row count difference."""
+        original_stats = {
+            "table_count": 5,
+            "database_size": "25 MB",
+            "estimated_total_rows": 1000,
+        }
+
+        current_stats = {
+            "table_count": 5,
+            "database_size": "25 MB",
+            "estimated_total_rows": 0,  # No rows found but original had data
+        }
+
+        backup_stats = {"file_size_bytes": 12345, "estimated_table_count": 5}
+
+        result = self.postgres._verify_import_success(
+            original_stats, current_stats, backup_stats
+        )
+        assert result["success"] is False
+        assert any(
+            "No rows found in restored database" in warning
+            for warning in result["warnings"]
+        )
+
+    def test_display_verification_results(self):
+        """Test _display_verification_results formats data correctly."""
+        verification_data = {
+            "success": True,
+            "warnings": [],
+            "tables_restored": 5,
+            "original_tables": 5,
+            "estimated_rows": 1000,
+            "database_size": "25 MB",
+        }
+
+        # Mock console to capture output
+        with patch.object(self.console, "print") as mock_print:
+            self.postgres._display_verification_results(verification_data)
+
+            # Should have printed verification results
+            assert mock_print.call_count >= 3  # At least header + 2 data lines
+
+            # Check that key information is included in output
+            call_args_list = [str(call) for call in mock_print.call_args_list]
+            output_text = " ".join(call_args_list)
+            assert "Tables:" in output_text
+            assert "Estimated rows:" in output_text
+            assert "Database size:" in output_text

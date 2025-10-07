@@ -574,3 +574,105 @@ class TestVolumeValidationEdgeCases:
 
         # Should fail due to same volume name, not path
         assert service.is_configured_for_postgres_upgrade() is False
+
+
+class TestDockerComposeConfigMethods:
+    """Test DockerComposeConfig utility methods."""
+
+    def setup_method(self):
+        """Set up test fixtures."""
+        from postgres_upgrader.compose_inspector import ServiceConfig
+
+        # Create a realistic Docker Compose config for testing
+        postgres_service = ServiceConfig(
+            name="postgres",
+            volumes=[
+                VolumeMount(
+                    name="postgres_data",
+                    path="/var/lib/postgresql/data",
+                    raw="postgres_data:/var/lib/postgresql/data",
+                ),
+                VolumeMount(
+                    name="postgres_backups",
+                    path="/tmp/postgresql/backups",
+                    raw="postgres_backups:/tmp/postgresql/backups",
+                ),
+            ],
+        )
+
+        # Add environment variables for PostgreSQL
+        postgres_service.environment = {
+            "POSTGRES_USER": "testuser",
+            "POSTGRES_DB": "testdb",
+            "POSTGRES_PASSWORD": "testpass",
+        }
+
+        redis_service = ServiceConfig(
+            name="redis",
+            volumes=[
+                VolumeMount(
+                    name="redis_data",
+                    path="/data",
+                    raw="redis_data:/data",
+                ),
+            ],
+        )
+
+        self.compose_config = DockerComposeConfig(
+            name="test_project",
+            services={"postgres": postgres_service, "redis": redis_service},
+        )
+
+    def test_get_service_exists(self):
+        """Test get_service returns correct service when it exists."""
+        service = self.compose_config.get_service("postgres")
+        assert service is not None
+        assert service.name == "postgres"
+        assert len(service.volumes) == 2
+
+    def test_get_service_not_exists(self):
+        """Test get_service returns None when service doesn't exist."""
+        service = self.compose_config.get_service("nonexistent")
+        assert service is None
+
+    def test_get_volumes_existing_service(self):
+        """Test get_volumes returns volumes for existing service."""
+        volumes = self.compose_config.get_volumes("postgres")
+        assert len(volumes) == 2
+        assert volumes[0].name == "postgres_data"
+        assert volumes[1].name == "postgres_backups"
+
+    def test_get_volumes_nonexistent_service(self):
+        """Test get_volumes returns empty list for nonexistent service."""
+        volumes = self.compose_config.get_volumes("nonexistent")
+        assert volumes == []
+
+    def test_get_postgres_user_with_env_var(self):
+        """Test get_postgres_user returns value from environment variable."""
+        user = self.compose_config.get_postgres_user("postgres")
+        assert user == "testuser"
+
+    def test_get_postgres_user_no_env_var(self):
+        """Test get_postgres_user returns None when no env var set."""
+        user = self.compose_config.get_postgres_user("redis")
+        assert user is None
+
+    def test_get_postgres_user_nonexistent_service(self):
+        """Test get_postgres_user returns None for nonexistent service."""
+        user = self.compose_config.get_postgres_user("nonexistent")
+        assert user is None
+
+    def test_get_postgres_db_with_env_var(self):
+        """Test get_postgres_db returns value from environment variable."""
+        db = self.compose_config.get_postgres_db("postgres")
+        assert db == "testdb"
+
+    def test_get_postgres_db_no_env_var(self):
+        """Test get_postgres_db returns None when no env var set."""
+        db = self.compose_config.get_postgres_db("redis")
+        assert db is None
+
+    def test_get_postgres_db_nonexistent_service(self):
+        """Test get_postgres_db returns None for nonexistent service."""
+        db = self.compose_config.get_postgres_db("nonexistent")
+        assert db is None

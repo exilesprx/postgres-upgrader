@@ -1,6 +1,5 @@
 import docker
 import time
-from rich.console import Console
 import subprocess
 from datetime import datetime
 from typing import Optional, TYPE_CHECKING
@@ -45,91 +44,26 @@ class DockerManager:
         self.database_name = database_name
 
     def __enter__(self) -> "DockerManager":
+        """
+        Enter the context manager and initialize Docker client.
+
+        Returns:
+            DockerManager: Self for use in with statements
+        """
         self.client = docker.from_env()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.client:
-            self.client.close()
-
-    def perform_postgres_upgrade(self, console: Console):
         """
-        Perform a complete PostgreSQL upgrade workflow with verification.
-
-        This method performs the full PostgreSQL upgrade sequence:
-        1. Get baseline database statistics
-        2. Create backup of current database
-        3. Verify backup integrity
-        4. Stop the PostgreSQL service container
-        5. Update and build the service with new PostgreSQL version
-        6. Remove the old data volume
-        7. Start the service with new PostgreSQL version
-        8. Verify backup volume is mounted
-        9. Import data from the backup into the new database
-        10. Verify import success
-        11. Update collation version for the database
+        Exit the context manager and clean up Docker client connection.
 
         Args:
-            console: Rich Console instance for formatted user output
-
-        Raises:
-            Exception: If any step fails or required config is missing
-
-        Note:
-            This is a destructive operation that removes the old data volume.
-            Ensure you have proper backups before running this workflow.
+            exc_type: Exception type (if any)
+            exc_val: Exception value (if any)
+            exc_tb: Exception traceback (if any)
         """
-        if not self.service_config.is_configured_for_postgres_upgrade():
-            raise Exception("Service must have selected volumes for PostgreSQL upgrade")
-
-        console.print("  Collecting database statistics...")
-        original_stats = self.get_database_statistics()
-        console.print(
-            f"   Current database: {original_stats['table_count']} tables, {original_stats['database_size']}"
-        )
-
-        console.print(
-            f"  Creating backup of database '{self.database_name}' for user '{self.database_user}'..."
-        )
-        backup_path = self.create_postgres_backup()
-        console.print(f"Backup created successfully: {backup_path}")
-
-        # Verify backup integrity before proceeding
-        console.print("  Verifying backup integrity...")
-        backup_stats = self.verify_backup_integrity(backup_path)
-        console.print(
-            f"   Backup verified: {backup_stats['file_size_bytes']} bytes, ~{backup_stats['estimated_table_count']} tables",
-            style="green",
-        )
-
-        self.stop_service_container()
-        self.remove_service_container()
-        self.update_service_container()
-        self.build_service_container()
-        self.remove_service_main_volume()
-        container = self.start_service_container()
-
-        console.print("  Verifying backup volume is mounted...")
-        self.verify_backup_volume_mounted(container=container)
-
-        console.print(
-            f"  Importing data from backup into new database '{self.database_name}'..."
-        )
-        self.import_data_from_backup(backup_path)
-
-        verification_result = self.verify_import_success(original_stats, backup_stats)
-        self.display_verification_results(console, verification_result)
-        if verification_result["success"] is False:
-            console.print(
-                "Import verification failed - data may not have been restored correctly",
-                style="bold red",
-            )
-            raise Exception("PostgreSQL upgrade verification failed. Please review.")
-
-        self.update_collation_version()
-        console.print(
-            "  PostgreSQL upgrade completed successfully!", style="bold green"
-        )
+        if self.client:
+            self.client.close()
 
     def create_postgres_backup(self) -> str:
         """
@@ -182,7 +116,15 @@ class DockerManager:
         return backup_path
 
     def stop_service_container(self):
-        """Stop and remove the configured service container."""
+        """
+        Stop the configured service container using Docker Compose.
+
+        Uses Docker Compose to gracefully stop the service container
+        while preserving volumes and network configurations.
+
+        Raises:
+            Exception: If the service fails to stop or Docker Compose command fails
+        """
         service_name = self.service_config.name
         try:
             subprocess.run(["docker", "compose", "stop", service_name], check=True)
@@ -190,6 +132,16 @@ class DockerManager:
             raise Exception(f"Failed to stop service {service_name}: {e}")
 
     def remove_service_container(self):
+        """
+        Remove the configured service container using Docker Compose.
+
+        Permanently removes the service container while preserving volumes.
+        This is typically called after stopping the container and before
+        rebuilding with a new PostgreSQL version.
+
+        Raises:
+            Exception: If the container removal fails or Docker Compose command fails
+        """
         service_name = self.service_config.name
         try:
             subprocess.run(["docker", "compose", "rm", service_name], check=True)
@@ -197,7 +149,16 @@ class DockerManager:
             raise Exception(f"Failed to remove service {service_name}: {e}")
 
     def update_service_container(self):
-        """Pull latest image for the configured service."""
+        """
+        Pull the latest image for the configured service.
+
+        Downloads the latest version of the Docker image specified in the
+        Docker Compose configuration for the service. This is typically
+        used to get a newer PostgreSQL version during upgrades.
+
+        Raises:
+            Exception: If image pull fails or Docker Compose command fails
+        """
         service_name = self.service_config.name
         try:
             subprocess.run(["docker", "compose", "pull", service_name], check=True)
@@ -205,7 +166,16 @@ class DockerManager:
             raise Exception(f"Failed to update service {service_name}: {e}")
 
     def build_service_container(self):
-        """Build the configured service container."""
+        """
+        Build the configured service container using Docker Compose.
+
+        Rebuilds the service container from the Docker Compose configuration,
+        incorporating any image updates or configuration changes. This is
+        typically called after updating the service image.
+
+        Raises:
+            Exception: If the build process fails or Docker Compose command fails
+        """
         service_name = self.service_config.name
         try:
             subprocess.run(["docker", "compose", "build", service_name], check=True)
@@ -213,7 +183,22 @@ class DockerManager:
             raise Exception(f"Failed to build service {service_name}: {e}")
 
     def remove_service_main_volume(self):
-        """Remove the main volume for the configured service."""
+        """
+        Remove the main data volume for the configured service.
+
+        Permanently deletes the main PostgreSQL data volume, which is necessary
+        during major version upgrades to ensure the new PostgreSQL version
+        creates a fresh data directory with the correct format.
+
+        Raises:
+            Exception: If service is not configured for PostgreSQL upgrade,
+                      main volume doesn't have a resolved name, or volume
+                      removal fails
+
+        Warning:
+            This operation is destructive and will permanently delete all
+            data in the main volume. Ensure you have a backup before calling.
+        """
         if not self.service_config.is_configured_for_postgres_upgrade():
             raise Exception("Service must have selected volumes for PostgreSQL upgrade")
 
@@ -229,7 +214,20 @@ class DockerManager:
             raise Exception(f"Failed to remove volume {main_volume.name}: {e}")
 
     def start_service_container(self) -> Container:
-        """Start the configured service container."""
+        """
+        Start the configured service container using Docker Compose.
+
+        Starts the service container in detached mode and waits for it
+        to become healthy before returning. This ensures the container
+        is ready for database operations.
+
+        Returns:
+            Container: The Docker container object for the started service
+
+        Raises:
+            Exception: If service startup fails, container health check fails,
+                      or Docker Compose command fails
+        """
         service_name = self.service_config.name
         try:
             subprocess.run(["docker", "compose", "up", "-d", service_name], check=True)
@@ -316,10 +314,23 @@ class DockerManager:
         """
         Force volume reconnection without full container restart.
 
-        Attempts to re-establish Docker volume connection by:
-        1. Forcing filesystem sync
-        2. Refreshing Docker's container and volume state
-        3. Using Docker API to reload volume metadata
+        Attempts to re-establish Docker volume connection by performing
+        filesystem sync operations and refreshing Docker's internal state
+        for both the container and volume objects.
+
+        Args:
+            container: Docker container object to reconnect volumes for
+            backup_volume: VolumeMount configuration for the backup volume
+                          to reconnect (can be None)
+
+        Raises:
+            Exception: If volume reconnection operations fail or
+                      DockerManager is not properly initialized
+
+        Note:
+            This is a lightweight alternative to full container restart
+            that attempts to resolve volume mounting issues through
+            Docker API operations.
         """
         if self.client is None:
             raise Exception("DockerManager not properly initialized.")
@@ -342,6 +353,24 @@ class DockerManager:
     def _check_backup_volume_health(
         self, container, backup_volume: Optional["VolumeMount"]
     ) -> bool:
+        """
+        Check if the backup volume is properly mounted and accessible.
+
+        Verifies both that the volume is mounted in the container and that
+        it's accessible by attempting to list its contents.
+
+        Args:
+            container: Docker container object to check volume mounting in
+            backup_volume: VolumeMount configuration for the backup volume
+                          to check (can be None)
+
+        Returns:
+            bool: True if volume is properly mounted and accessible, False otherwise
+
+        Note:
+            This method performs both mount verification (checking container
+            mount points) and accessibility verification (testing file operations).
+        """
         if not backup_volume or not backup_volume.path:
             return False
 
@@ -437,7 +466,24 @@ class DockerManager:
         return False
 
     def find_container_by_service(self) -> Container:
-        """Find the Docker container for the configured service."""
+        """
+        Find the Docker container for the configured service.
+
+        Locates the running container associated with the service using
+        Docker Compose labels for service name and optionally project name.
+
+        Returns:
+            Container: The Docker container object for the service
+
+        Raises:
+            Exception: If DockerManager is not properly initialized,
+                      no containers are found for the service, or
+                      multiple containers are found (ambiguous state)
+
+        Note:
+            Uses Docker Compose labeling convention to identify containers
+            by service name and project name.
+        """
         if self.client is None:
             raise Exception(
                 "DockerManager not properly initialized. Use as context manager."
@@ -458,7 +504,27 @@ class DockerManager:
         return containers[0]
 
     def check_container_status(self, container, sleep=5, timeout=30) -> bool:
-        """Check if the service container is healthy after restart."""
+        """
+        Check if the service container is healthy after restart.
+
+        Monitors container health status using Docker health checks, with
+        a fallback to PostgreSQL-specific readiness checks if health
+        checks are not configured.
+
+        Args:
+            container: Docker container object to check health for
+            sleep: Time to wait between health check attempts (default: 5 seconds)
+            timeout: Maximum time to wait for container to become healthy (default: 30 seconds)
+
+        Returns:
+            bool: True if container is healthy and ready, False if unhealthy
+                 or not ready within the timeout period
+
+        Note:
+            Uses Docker health checks first, then falls back to pg_isready
+            if health checks are not available or fail. This ensures
+            compatibility with containers that may not have health checks configured.
+        """
         tries = 1
         while True:
             container.reload()
@@ -487,14 +553,28 @@ class DockerManager:
         """
         Verify backup file integrity and extract basic statistics.
 
+        Performs comprehensive validation of a PostgreSQL backup file including
+        file existence, size validation, header verification, and content analysis.
+
         Args:
-            backup_path: Container path to the backup file
+            backup_path: Container path to the backup file to verify
 
         Returns:
-            dict: Backup statistics including file size, table count estimates
+            dict: Backup statistics and validation results containing:
+                - file_size_bytes (int): Size of the backup file in bytes
+                - estimated_table_count (int): Estimated number of tables in backup
+                - has_valid_header (bool): Whether backup has valid PostgreSQL dump header
+                - backup_path (str): Path to the verified backup file
 
         Raises:
-            Exception: If backup verification fails
+            Exception: If DockerManager is not properly initialized,
+                      backup file is not found or inaccessible,
+                      backup file is empty, cannot read backup file header,
+                      or backup file is not a valid PostgreSQL dump
+
+        Note:
+            Validates both file-level properties (existence, size) and
+            content-level properties (PostgreSQL dump format, table estimates).
         """
         if not self.client:
             raise Exception(
@@ -539,11 +619,25 @@ class DockerManager:
         """
         Get current database statistics for verification purposes.
 
+        Collects comprehensive database metrics including table counts,
+        row estimates, and database size information for use in backup
+        verification and upgrade validation workflows.
+
         Returns:
-            dict: Database statistics including table counts, row counts
+            dict: Database statistics containing:
+                - table_count (int): Number of user tables in the public schema
+                - estimated_total_rows (int): Estimated total rows across all user tables
+                - database_size (str): Human-readable database size (e.g., "15 MB")
+                - database_name (str): Name of the database analyzed
 
         Raises:
-            Exception: If statistics collection fails
+            Exception: If DockerManager is not properly initialized,
+                      container cannot be found, or database queries fail
+
+        Note:
+            Row estimates are based on PostgreSQL statistics and may not
+            reflect exact counts. Database size includes indexes and other
+            database objects, not just table data.
         """
         if not self.client:
             raise Exception(
@@ -611,102 +705,3 @@ class DockerManager:
             "database_size": db_size,
             "database_name": self.database_name,
         }
-
-    def verify_import_success(self, original_stats: dict, backup_stats: dict) -> dict:
-        """
-        Verify that data import was successful by comparing statistics.
-
-        Compares current database state against both original database statistics
-        and backup file statistics to ensure data was properly restored.
-
-        Args:
-            original_stats: Statistics from before backup (from get_database_statistics)
-            backup_stats: Statistics from backup verification (from verify_backup_integrity)
-
-        Returns:
-            dict: Verification results with success status and details
-
-        Raises:
-            Exception: If verification checks fail
-        """
-        if not self.client:
-            raise Exception(
-                "DockerManager not properly initialized. Use as context manager."
-            )
-
-        current_stats = self.get_database_statistics()
-        verification_warnings = []
-        success = True
-
-        if current_stats["table_count"] == 0:
-            verification_warnings.append("No tables found in restored database")
-            success = False
-
-        # Compare table counts (should match or be close)
-        original_tables = original_stats.get("table_count", 0)
-        current_tables = current_stats["table_count"]
-
-        if abs(original_tables - current_tables) > 1:  # Allow for small differences
-            verification_warnings.append(
-                f"Table count mismatch. Original: {original_tables}, Current: {current_tables}"
-            )
-            success = False
-
-        # Use backup_stats to verify backup was substantial enough
-        backup_table_count = backup_stats.get("estimated_table_count", 0)
-        if original_tables > 0 and backup_table_count == 0:
-            verification_warnings.append(
-                "Original database had tables but backup appears to contain no table definitions"
-            )
-            success = False
-
-        # Verify backup file wasn't suspiciously small
-        backup_size = backup_stats.get("file_size_bytes", 0)
-        if original_tables > 0 and backup_size < 1000:  # Less than 1KB seems too small
-            verification_warnings.append(
-                f"Backup file is suspiciously small ({backup_size} bytes) for a database with {original_tables} tables"
-            )
-            success = False
-
-        if (
-            current_stats["estimated_total_rows"] == 0
-            and original_stats.get("estimated_total_rows", 0) > 0
-        ):
-            verification_warnings.append(
-                "No rows found in restored database, but original had data"
-            )
-            success = False
-
-        return {
-            "success": success,
-            "warnings": verification_warnings,
-            "current_stats": current_stats,
-            "original_stats": original_stats,
-            "backup_stats": backup_stats,
-            "tables_restored": current_tables,
-            "original_tables": original_tables,
-            "estimated_rows": current_stats["estimated_total_rows"],
-            "database_size": current_stats["database_size"],
-        }
-
-    def display_verification_results(self, console: Console, data: dict):
-        """
-        Display verification results to the user in a formatted manner.
-
-        Args:
-            console: Rich Console instance for formatted output
-            data: Verification results dictionary from verify_import_success()
-                 Expected keys: success, warnings, tables_restored,
-                 estimated_rows, database_size
-        """
-        if not data["success"]:
-            for warning in data["warnings"]:
-                console.print(f"     WARNING: {warning}", style="red")
-            return
-
-        console.print("     Import verification successful:")
-        console.print(
-            f"      Tables: {data['tables_restored']} (original: {data['original_tables']})"
-        )
-        console.print(f"      Estimated rows: {data['estimated_rows']}")
-        console.print(f"      Database size: {data['database_size']}")
