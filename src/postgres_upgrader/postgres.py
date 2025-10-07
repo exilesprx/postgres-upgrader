@@ -33,7 +33,20 @@ def get_credentials(
     return user, database
 
 
-def run_postgres_upgrade() -> None:
+def handle_export_command(args) -> None:
+    """Handle the export command."""
+    # TODO: Implement backup-only functionality
+    # You might want to extract backup logic from run_postgres_upgrade
+    # or add parameters to control the workflow
+
+
+def handle_import_command(args) -> None:
+    """Handle the import command."""
+    # TODO: prompt user to select backup file
+    # TODO: Implement import-only functionality
+
+
+def handle_upgrade_command(args) -> None:
     """
     Execute the complete PostgreSQL upgrade workflow.
 
