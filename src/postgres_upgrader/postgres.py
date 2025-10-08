@@ -149,7 +149,7 @@ class Postgres:
 
             container = self._import_workflow(docker_mgr, backup_path, database)
 
-            current_stats = docker_mgr.get_database_statistics()
+            current_stats = docker_mgr.get_database_statistics(container)
             verification_result = self._verify_import_success(
                 original_stats, current_stats, backup_stats
             )

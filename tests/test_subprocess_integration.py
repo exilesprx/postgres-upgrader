@@ -197,14 +197,16 @@ services:
       target: /data
   nginx:
     volumes:
-    - type: bind
-      source: /host/path
+    - type: volume
+      source: nginx_data
       target: /etc/nginx
 volumes:
   db_data:
     name: project_db_data
   redis_data:
     name: project_redis_data
+  nginx_data:
+    name: project_nginx_data
 """
 
         with patch("postgres_upgrader.compose_inspector.subprocess.run") as mock_run:
@@ -259,7 +261,7 @@ volumes:
             assert config.services["postgres"].environment["POSTGRES_USER"] == "v2user"
 
     def test_parse_compose_bind_mounts(self):
-        """Test parsing of bind mounts vs named volumes."""
+        """Test that bind mounts are properly rejected."""
         mock_compose_output = """
 services:
   postgres:
@@ -280,11 +282,9 @@ volumes:
             mock_result.stdout = mock_compose_output
             mock_run.return_value = mock_result
 
-            config = parse_docker_compose()
-            postgres = config.services["postgres"]
-
-            # Should have both volume types
-            assert len(postgres.volumes) == 2
+            # Should raise exception when encountering bind mount
+            with pytest.raises(Exception, match="Non-volume mounts are not supported"):
+                parse_docker_compose()
 
     def test_parse_compose_external_volumes(self):
         """Test parsing of external volumes."""
@@ -429,7 +429,7 @@ volumes:
             assert len(postgres.volumes) == 1
 
     def test_parse_compose_missing_volume_definitions(self):
-        """Test handling when volume is referenced but not defined."""
+        """Test that missing volume definitions raise an error."""
         mock_compose_output = """
 services:
   postgres:
@@ -445,10 +445,12 @@ volumes: {}
             mock_result.stdout = mock_compose_output
             mock_run.return_value = mock_result
 
-            # Should handle missing volume definitions
-            config = parse_docker_compose()
-            postgres = config.services["postgres"]
-            assert len(postgres.volumes) == 1
+            # Should raise an error for missing volume definitions
+            with pytest.raises(
+                ValueError,
+                match="Could not resolve volume name for source: undefined_volume",
+            ):
+                parse_docker_compose()
 
     def test_parse_compose_very_large_config(self):
         """Test handling of very large Docker Compose configurations."""

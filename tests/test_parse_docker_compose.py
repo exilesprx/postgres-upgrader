@@ -11,6 +11,20 @@ from postgres_upgrader import (
 )
 from postgres_upgrader.compose_inspector import VolumeMount
 
+
+class TestVolumeMount:
+    def test_volume_mount_parsing_other_type(self):
+        """Test that non-volume mount types raise an exception."""
+        volume_config = {
+            "type": "bind",
+            "source": "/host/path",
+            "target": "/container/path",
+        }
+
+        with pytest.raises(Exception, match="Non-volume mounts are not supported"):
+            VolumeMount.from_string(volume_config)
+
+
 # Mock docker compose config output
 MOCK_DOCKER_COMPOSE_CONFIG = """
 name: postgres-updater
@@ -118,7 +132,14 @@ class TestVolumeAccess:
                 "volume": {},
             },
         ]
-        volumes = [VolumeMount.from_string(config) for config in volume_configs]
+        volume_mappings = {
+            "database": {"name": "test_project_database"},
+            "backups": {"name": "test_project_backups"},
+        }
+        volumes = [
+            VolumeMount.from_string(config, volume_mappings)
+            for config in volume_configs
+        ]
 
         # Find backup volume by name
         backup_volume = next((v for v in volumes if v.name == "backups"), None)
@@ -142,7 +163,14 @@ class TestVolumeAccess:
                 "volume": {},
             },
         ]
-        volumes = [VolumeMount.from_string(config) for config in volume_configs]
+        volume_mappings = {
+            "database": {"name": "test_project_database"},
+            "logs": {"name": "test_project_logs"},
+        }
+        volumes = [
+            VolumeMount.from_string(config, volume_mappings)
+            for config in volume_configs
+        ]
 
         # Try to find non-existent volume
         missing_volume = next((v for v in volumes if v.name == "backups"), None)
@@ -180,23 +208,15 @@ class TestVolumeMount:
         assert result == expected
 
     def test_volume_mount_parsing_other_type(self):
-        """Test parsing volume mount config dict with non-volume type."""
+        """Test that non-volume mount types raise an exception."""
         volume_config = {
             "type": "bind",
             "source": "/host/path",
             "target": "/container/path",
         }
 
-        result = VolumeMount.from_string(volume_config)
-
-        expected = VolumeMount(
-            name=None,
-            path="/container/path",
-            raw="unknown:/container/path",
-            resolved_name=None,
-        )
-
-        assert result == expected
+        with pytest.raises(Exception, match="Non-volume mounts are not supported"):
+            VolumeMount.from_string(volume_config)
 
 
 class TestVolumeValidation:
@@ -211,11 +231,13 @@ class TestVolumeValidation:
             name="database",
             path="/var/lib/postgresql/data",
             raw="database:/var/lib/postgresql/data",
+            resolved_name="test_project_database",
         )
         backup_vol = VolumeMount(
             name="backups",
             path="/var/lib/postgresql/backups",
             raw="backups:/var/lib/postgresql/backups",
+            resolved_name="test_project_backups",
         )
         service.select_volumes(main_vol, backup_vol)
 
@@ -230,6 +252,7 @@ class TestVolumeValidation:
             name="database",
             path="/var/lib/postgresql/data",
             raw="database:/var/lib/postgresql/data",
+            resolved_name="test_project_database",
         )
         service.select_volumes(same_vol, same_vol)
 
@@ -244,11 +267,13 @@ class TestVolumeValidation:
             name="database",
             path="/var/lib/postgresql/data",
             raw="database:/var/lib/postgresql/data",
+            resolved_name="test_project_database",
         )
         backup_vol = VolumeMount(
             name="backups",
             path="/var/lib/postgresql/data/backups",
             raw="backups:/var/lib/postgresql/data/backups",
+            resolved_name="test_project_backups",
         )
         service.select_volumes(main_vol, backup_vol)
 
@@ -271,6 +296,7 @@ class TestVolumeValidation:
             name="database",
             path="/var/lib/postgresql/data",
             raw="database:/var/lib/postgresql/data",
+            resolved_name="test_project_database",
         )
         service.selected_main_volume = main_vol
         # Leave backup volume as None
@@ -290,11 +316,13 @@ class TestVolumeValidationEdgeCases:
             name="database",
             path="/var/lib/postgresql/custom",
             raw="database:/var/lib/postgresql/custom",
+            resolved_name="test_project_database",
         )
         backup_vol = VolumeMount(
             name="backups",
             path="/var/lib/postgresql/data",  # This is the dangerous path
             raw="backups:/var/lib/postgresql/data",
+            resolved_name="test_project_backups",
         )
         service.select_volumes(main_vol, backup_vol)
 
@@ -311,12 +339,16 @@ class TestVolumeValidationEdgeCases:
 
         service = ServiceConfig(name="test")
         main_vol = VolumeMount(
-            name="database", path="/custom/data", raw="database:/custom/data"
+            name="database",
+            path="/custom/data",
+            raw="database:/custom/data",
+            resolved_name="test_project_database",
         )
         backup_vol = VolumeMount(
             name="backups",
             path="/custom/data",  # Exact same path, different volume name
             raw="backups:/custom/data",
+            resolved_name="test_project_backups",
         )
         service.select_volumes(main_vol, backup_vol)
 
@@ -331,11 +363,13 @@ class TestVolumeValidationEdgeCases:
             name="database",
             path="/var/lib/postgresql/data/",
             raw="database:/var/lib/postgresql/data/",
+            resolved_name="test_project_database",
         )
         backup_vol = VolumeMount(
             name="backups",
             path="/var/lib/postgresql/backups/",
             raw="backups:/var/lib/postgresql/backups/",
+            resolved_name="test_project_backups",
         )
         service.select_volumes(main_vol, backup_vol)
 
@@ -350,11 +384,13 @@ class TestVolumeValidationEdgeCases:
             name="database",
             path="/var/lib/postgresql/data/",
             raw="database:/var/lib/postgresql/data/",
+            resolved_name="test_project_database",
         )
         backup_vol = VolumeMount(
             name="backups",
             path="/var/lib/postgresql/data/backups/",
             raw="backups:/var/lib/postgresql/data/backups/",
+            resolved_name="test_project_backups",
         )
         service.select_volumes(main_vol, backup_vol)
 
@@ -369,11 +405,13 @@ class TestVolumeValidationEdgeCases:
             name="database",
             path="/var/lib/postgresql/data/db",
             raw="database:/var/lib/postgresql/data/db",
+            resolved_name="test_project_database",
         )
         backup_vol = VolumeMount(
             name="backups",
             path="/var/lib/postgresql",
             raw="backups:/var/lib/postgresql",
+            resolved_name="test_project_backups",
         )
         service.select_volumes(main_vol, backup_vol)
 
@@ -385,8 +423,18 @@ class TestVolumeValidationEdgeCases:
         from postgres_upgrader.compose_inspector import ServiceConfig
 
         service = ServiceConfig(name="test")
-        main_vol = VolumeMount(name="database", path=None, raw="database")
-        backup_vol = VolumeMount(name="backups", path=None, raw="backups")
+        main_vol = VolumeMount(
+            name="database",
+            path=None,
+            raw="database",
+            resolved_name="test_project_database",
+        )
+        backup_vol = VolumeMount(
+            name="backups",
+            path=None,
+            raw="backups",
+            resolved_name="test_project_backups",
+        )
         service.select_volumes(main_vol, backup_vol)
 
         # None paths become empty strings, which are equal -> invalid
@@ -401,8 +449,14 @@ class TestVolumeValidationEdgeCases:
             name="database",
             path="/var/lib/postgresql/data",
             raw="database:/var/lib/postgresql/data",
+            resolved_name="test_project_database",
         )
-        backup_vol = VolumeMount(name="backups", path=None, raw="backups")
+        backup_vol = VolumeMount(
+            name="backups",
+            path=None,
+            raw="backups",
+            resolved_name="test_project_backups",
+        )
         service.select_volumes(main_vol, backup_vol)
 
         assert service.is_configured_for_postgres_upgrade() is True
@@ -412,8 +466,18 @@ class TestVolumeValidationEdgeCases:
         from postgres_upgrader.compose_inspector import ServiceConfig
 
         service = ServiceConfig(name="test")
-        main_vol = VolumeMount(name="database", path="", raw="database")
-        backup_vol = VolumeMount(name="backups", path="", raw="backups")
+        main_vol = VolumeMount(
+            name="database",
+            path="",
+            raw="database",
+            resolved_name="test_project_database",
+        )
+        backup_vol = VolumeMount(
+            name="backups",
+            path="",
+            raw="backups",
+            resolved_name="test_project_backups",
+        )
         service.select_volumes(main_vol, backup_vol)
 
         # Empty paths are equal after normalization -> invalid
@@ -424,8 +488,18 @@ class TestVolumeValidationEdgeCases:
         from postgres_upgrader.compose_inspector import ServiceConfig
 
         service = ServiceConfig(name="test")
-        main_vol = VolumeMount(name="database", path="/", raw="database:/")
-        backup_vol = VolumeMount(name="backups", path="/b", raw="backups:/b")
+        main_vol = VolumeMount(
+            name="database",
+            path="/",
+            raw="database:/",
+            resolved_name="test_project_database",
+        )
+        backup_vol = VolumeMount(
+            name="backups",
+            path="/b",
+            raw="backups:/b",
+            resolved_name="test_project_backups",
+        )
         service.select_volumes(main_vol, backup_vol)
 
         # Root path "/" becomes "" after rstrip, so "/b" starts with "" + "/" = "/" -> nested -> invalid
@@ -440,11 +514,13 @@ class TestVolumeValidationEdgeCases:
             name="database",
             path="/app/postgres/data",
             raw="database:/app/postgres/data",
+            resolved_name="test_project_database",
         )
         backup_vol = VolumeMount(
             name="backups",
             path="/app/postgres/data/subdir/backups",
             raw="backups:/app/postgres/data/subdir/backups",
+            resolved_name="test_project_backups",
         )
         service.select_volumes(main_vol, backup_vol)
 
@@ -459,11 +535,13 @@ class TestVolumeValidationEdgeCases:
             name="database",
             path="/var/lib/postgresql/data",
             raw="database:/var/lib/postgresql/data",
+            resolved_name="test_project_database",
         )
         backup_vol = VolumeMount(
             name="backups",
             path="/var/lib/postgresql/data_backup",
             raw="backups:/var/lib/postgresql/data_backup",
+            resolved_name="test_project_backups",
         )
         service.select_volumes(main_vol, backup_vol)
 
@@ -479,11 +557,13 @@ class TestVolumeValidationEdgeCases:
             name="database",
             path="/données/postgresql",
             raw="database:/données/postgresql",
+            resolved_name="test_project_database",
         )
         backup_vol = VolumeMount(
             name="backups",
             path="/sauvegarde/données",
             raw="backups:/sauvegarde/données",
+            resolved_name="test_project_backups",
         )
         service.select_volumes(main_vol, backup_vol)
 
@@ -498,11 +578,13 @@ class TestVolumeValidationEdgeCases:
             name="database",
             path="C:\\data\\postgresql",
             raw="database:C:\\data\\postgresql",
+            resolved_name="test_project_database",
         )
         backup_vol = VolumeMount(
             name="backups",
             path="D:\\backups\\postgresql",
             raw="backups:D:\\backups\\postgresql",
+            resolved_name="test_project_backups",
         )
         service.select_volumes(main_vol, backup_vol)
 
@@ -515,12 +597,16 @@ class TestVolumeValidationEdgeCases:
         service = ServiceConfig(name="test")
         long_path = "/very/long/path/that/goes/on/and/on/and/on/postgresql/data"
         main_vol = VolumeMount(
-            name="database", path=long_path, raw=f"database:{long_path}"
+            name="database",
+            path=long_path,
+            raw=f"database:{long_path}",
+            resolved_name="test_project_database",
         )
         backup_vol = VolumeMount(
             name="backups",
             path="/completely/different/very/long/backup/path/structure",
             raw="backups:/completely/different/very/long/backup/path/structure",
+            resolved_name="test_project_backups",
         )
         service.select_volumes(main_vol, backup_vol)
 
@@ -531,8 +617,18 @@ class TestVolumeValidationEdgeCases:
         from postgres_upgrader.compose_inspector import ServiceConfig
 
         service = ServiceConfig(name="test")
-        main_vol = VolumeMount(name="database", path="/data", raw="database:/data")
-        backup_vol = VolumeMount(name="backups", path="/backup", raw="backups:/backup")
+        main_vol = VolumeMount(
+            name="database",
+            path="/data",
+            raw="database:/data",
+            resolved_name="test_project_database",
+        )
+        backup_vol = VolumeMount(
+            name="backups",
+            path="/backup",
+            raw="backups:/backup",
+            resolved_name="test_project_backups",
+        )
         service.select_volumes(main_vol, backup_vol)
 
         # /data and /backup are siblings under root -> valid
@@ -544,10 +640,16 @@ class TestVolumeValidationEdgeCases:
 
         service = ServiceConfig(name="test")
         main_vol = VolumeMount(
-            name="database", path="/app/data////", raw="database:/app/data////"
+            name="database",
+            path="/app/data////",
+            raw="database:/app/data////",
+            resolved_name="test_project_database",
         )
         backup_vol = VolumeMount(
-            name="backups", path="/app/backup///", raw="backups:/app/backup///"
+            name="backups",
+            path="/app/backup///",
+            raw="backups:/app/backup///",
+            resolved_name="test_project_backups",
         )
         service.select_volumes(main_vol, backup_vol)
 
@@ -564,11 +666,13 @@ class TestVolumeValidationEdgeCases:
             name="database",
             path="/var/lib/postgresql/data",
             raw="database:/var/lib/postgresql/data",
+            resolved_name="test_project_database",
         )
         different_path_same_name = VolumeMount(
             name="database",  # Same name!
             path="/completely/different/path",
             raw="database:/completely/different/path",
+            resolved_name="test_project_database",
         )
         service.select_volumes(same_vol, different_path_same_name)
 
@@ -591,11 +695,13 @@ class TestDockerComposeConfigMethods:
                     name="postgres_data",
                     path="/var/lib/postgresql/data",
                     raw="postgres_data:/var/lib/postgresql/data",
+                    resolved_name="test_project_postgres_data",
                 ),
                 VolumeMount(
                     name="postgres_backups",
                     path="/tmp/postgresql/backups",
                     raw="postgres_backups:/tmp/postgresql/backups",
+                    resolved_name="test_project_postgres_backups",
                 ),
             ],
         )
@@ -614,6 +720,7 @@ class TestDockerComposeConfigMethods:
                     name="redis_data",
                     path="/data",
                     raw="redis_data:/data",
+                    resolved_name="test_project_redis_data",
                 ),
             ],
         )

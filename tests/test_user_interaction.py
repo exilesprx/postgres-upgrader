@@ -488,11 +488,13 @@ class TestUserInteractionEdgeCases:
                     name="data",
                     path="/var/lib/postgresql/data",
                     raw="data:/var/lib/postgresql/data",
+                    resolved_name="test_project_data",
                 ),
                 VolumeMount(
                     name="backup",
                     path="/backup",
                     raw="backup:/backup",
+                    resolved_name="test_project_backup",
                 ),
             ],
         )
@@ -600,11 +602,13 @@ class TestPromptIntegrationWorkflows:
                     name="data",
                     path="/var/lib/postgresql/data",
                     raw="data:/var/lib/postgresql/data",
+                    resolved_name="test_project_data",
                 ),
                 VolumeMount(
                     name="backup",
                     path="/backup",
                     raw="backup:/backup",
+                    resolved_name="test_project_backup",
                 ),
             ],
         )

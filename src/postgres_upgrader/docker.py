@@ -203,9 +203,9 @@ class DockerManager:
         if not self.service_config.is_configured_for_postgres_upgrade():
             raise Exception("Service must have selected volumes for PostgreSQL upgrade")
 
-        main_volume = self.service_config.selected_main_volume
-        if not main_volume or not main_volume.resolved_name:
-            raise Exception("Main volume does not have a resolved name")
+        main_volume = self.service_config.get_main_volume()
+        if not main_volume:
+            raise Exception("Main volume not selected.")
 
         try:
             subprocess.run(
@@ -269,7 +269,10 @@ class DockerManager:
             raise Exception("Service must have selected volumes for PostgreSQL upgrade")
 
         backup_volume = self.service_config.get_backup_volume()
-        if not backup_volume or not backup_volume.path:
+        if not backup_volume:
+            raise Exception("Backup volume not selected.")
+
+        if backup_volume.path.strip() == "":
             raise Exception("Backup directory not found in configuration")
 
         max_retries = int(timeout // sleep)
@@ -551,9 +554,6 @@ class DockerManager:
             container cannot be found.
         """
         try:
-            if not volume.path:
-                raise Exception("Volume path is not specified")
-
             exit_code, output = container.exec_run(
                 ["find", volume.path, "-maxdepth", "1", "-type", "f", "-print"],
                 user="root",
@@ -688,7 +688,7 @@ class DockerManager:
         try:
             container.exec_run(["sync"], user="root")
 
-            if backup_volume and backup_volume.name:
+            if backup_volume:
                 try:
                     volume = self.client.volumes.get(backup_volume.name)
                     volume.reload()
@@ -721,7 +721,7 @@ class DockerManager:
             This method performs both mount verification (checking container
             mount points) and accessibility verification (testing file operations).
         """
-        if not backup_volume or not backup_volume.path:
+        if not backup_volume:
             return False
 
         # Check if the backup volume is mounted

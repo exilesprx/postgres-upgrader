@@ -8,10 +8,10 @@ from dataclasses import dataclass, field
 class VolumeMount:
     """Information about a Docker volume mount."""
 
-    name: Optional[str]  # e.g., "database"
-    path: Optional[str]  # e.g., "/var/lib/postgresql/data"
+    name: str  # e.g., "database"
+    path: str  # e.g., "/var/lib/postgresql/data"
     raw: str  # e.g., "database:/var/lib/postgresql/data"
-    resolved_name: Optional[str] = None  # e.g., "postgres-updater_database"
+    resolved_name: str  # e.g., "postgres-updater_database"
 
     @classmethod
     def from_string(
@@ -20,24 +20,26 @@ class VolumeMount:
         """Parse a Docker Compose config dict into a VolumeMount object."""
 
         if volume_config.get("type") == "volume":
-            # This is a named volume with resolved names
             source = volume_config.get("source")
-            target_path = volume_config.get("target", "")
-            raw = f"{source}:{target_path}" if source else target_path
+            target_path = volume_config.get("target")
+            if not source or not target_path:
+                raise ValueError(f"Invalid volume config: {volume_config}")
+
+            raw = f"{source}:{target_path}"
 
             # Get the resolved name from the volumes section
             resolved_name = None
-            if source and volume_mappings and source in volume_mappings:
+            if volume_mappings and source in volume_mappings:
                 resolved_name = volume_mappings[source].get("name", source)
+
+            if resolved_name is None:
+                raise ValueError(f"Could not resolve volume name for source: {source}")
 
             return cls(
                 name=source, path=target_path, raw=raw, resolved_name=resolved_name
             )
         else:
-            # Handle other volume types
-            target_path = volume_config.get("target", "")
-            raw = f"unknown:{target_path}"
-            return cls(name=None, path=target_path, raw=raw)
+            raise Exception("Non-volume mounts are not supported.")
 
 
 @dataclass
@@ -65,6 +67,10 @@ class ServiceConfig:
             if self.selected_main_volume
             else None
         )
+
+    def get_main_volume(self) -> Optional[VolumeMount]:
+        """Get the selected main volume."""
+        return self.selected_main_volume
 
     def get_backup_volume(self) -> Optional[VolumeMount]:
         """Get the selected backup volume."""
