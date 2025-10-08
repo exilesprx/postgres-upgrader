@@ -6,12 +6,13 @@ using Docker Compose, separated from CLI concerns.
 """
 
 from rich.console import Console
-from typing import Tuple, Optional, TYPE_CHECKING
+from typing import Container, Tuple, Optional, TYPE_CHECKING
 from . import (
     identify_service_volumes,
     DockerManager,
     parse_docker_compose,
     prompt_container_user,
+    prompt_user_choice,
 )
 
 if TYPE_CHECKING:
@@ -82,12 +83,23 @@ class Postgres:
         if not selected_service.is_configured_for_postgres_upgrade():
             raise Exception("Service must have selected volumes for PostgreSQL import")
 
+        volume = selected_service.get_backup_volume()
+        if not volume:
+            raise Exception("Backup volume not configured for import")
+
         with DockerManager(
             compose_config.name, selected_service, container_user, user, database
         ) as docker_mgr:
-            # TODO: prompt user to select backup file
-            backup_path = ""
-            self._import_workflow(docker_mgr, backup_path, database)
+            container = docker_mgr.start_service_container()
+            files = docker_mgr.list_files_in_volume(container, volume)
+            if not files:
+                raise Exception("No backup files found in backup volume")
+
+            file = prompt_user_choice(files, "Select a backup file to import:")
+            if not file:
+                raise Exception("Backup file selection cancelled")
+
+            self._import_workflow(docker_mgr, file, database)
 
     def handle_upgrade_command(self, args) -> None:
         """
@@ -134,7 +146,7 @@ class Postgres:
             docker_mgr.build_service_container()
             docker_mgr.remove_service_main_volume()
 
-            self._import_workflow(docker_mgr, backup_path, database)
+            container = self._import_workflow(docker_mgr, backup_path, database)
 
             current_stats = docker_mgr.get_database_statistics()
             verification_result = self._verify_import_success(
@@ -181,7 +193,9 @@ class Postgres:
 
         return backup_path, original_stats, backup_stats
 
-    def _import_workflow(self, docker_mgr, backup_path: str, database: str) -> None:
+    def _import_workflow(
+        self, docker_mgr, backup_path: str, database: str
+    ) -> Container:
         """
         Execute the import workflow including container startup, volume verification, and data import.
 
@@ -202,6 +216,7 @@ class Postgres:
         docker_mgr.import_data_from_backup(backup_path)
         docker_mgr.update_collation_version()
         self.console.print("  Import completed successfully!", style="bold green")
+        return container
 
     def _get_selections(
         self,

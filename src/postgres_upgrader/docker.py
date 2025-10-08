@@ -4,6 +4,7 @@ import subprocess
 from datetime import datetime
 from typing import Optional, TYPE_CHECKING
 from docker.models.containers import Container
+from docker.models.volumes import Volume
 
 if TYPE_CHECKING:
     from .compose_inspector import ServiceConfig, VolumeMount
@@ -532,13 +533,49 @@ class DockerManager:
             "backup_path": backup_path,
         }
 
-    def get_database_statistics(self) -> dict:
+    def list_files_in_volume(
+        self, container: Container, volume: "VolumeMount"
+    ) -> Optional[list]:
+        """
+        List files in the specified Docker volume.
+
+        Args:
+            container: Docker container object to list files in
+            volume: Docker volume object to list files from
+
+        Returns:
+            A list of file paths in the volume, or None if volume is not mounted
+
+        Raises:
+            Exception: If DockerManager is not properly initialized or
+            container cannot be found.
+        """
+        try:
+            if not volume.path:
+                raise Exception("Volume path is not specified")
+
+            exit_code, output = container.exec_run(
+                ["find", volume.path, "-maxdepth", "1", "-type", "f", "-print"],
+                user="root",
+            )
+
+            if exit_code != 0:
+                raise Exception(f"Volume {volume.name} is not mounted in container")
+
+            return output.decode("utf-8").strip().split("\n")
+        except subprocess.CalledProcessError:
+            return None
+
+    def get_database_statistics(self, container: Container) -> dict:
         """
         Get current database statistics for verification purposes.
 
         Collects comprehensive database metrics including table counts,
         row estimates, and database size information for use in backup
         verification and upgrade validation workflows.
+
+        Args:
+            container: Docker container object to run queries in
 
         Returns:
             dict: Database statistics containing:
@@ -560,8 +597,6 @@ class DockerManager:
             raise Exception(
                 "DockerManager not properly initialized. Use as context manager."
             )
-
-        container = self.find_container_by_service()
 
         # Get table count - using single line SQL to avoid whitespace issues
         sql_table_count = "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE';"
