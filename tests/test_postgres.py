@@ -129,6 +129,11 @@ class TestHandleImportCommand:
             "backup_file.sql",
             "another_backup.sql",
         ]
+        # Mock backup verification
+        mock_docker_instance.verify_backup_integrity.return_value = {
+            "file_size_bytes": 1024000,
+            "estimated_table_count": 5,
+        }
         mock_docker_manager.return_value.__enter__.return_value = mock_docker_instance
 
         with (
@@ -146,6 +151,9 @@ class TestHandleImportCommand:
         mock_docker_instance.start_service_container.assert_called_once()
         mock_docker_instance.list_files_in_volume.assert_called_once_with(
             mock_container, mock_backup_volume
+        )
+        mock_docker_instance.verify_backup_integrity.assert_called_once_with(
+            "backup_file.sql"
         )
         mock_prompt_choice.assert_called_once_with(
             ["backup_file.sql", "another_backup.sql"], "Select a backup file to import:"
@@ -635,9 +643,9 @@ class TestPostgresHelperMethods:
         self.console = Console()
         self.postgres = Postgres(self.console)
 
-    def test_verify_import_success_successful(self):
-        """Test _verify_import_success with successful import."""
-        # Mock successful import verification data
+    def test_verify_upgrade_success_successful(self):
+        """Test _verify_upgrade_success with successful upgrade."""
+        # Mock successful upgrade verification data
         original_stats = {
             "table_count": 5,
             "database_size": "25 MB",
@@ -653,13 +661,13 @@ class TestPostgresHelperMethods:
         backup_stats = {"file_size_bytes": 12345, "estimated_table_count": 5}
 
         # Should not raise any exceptions for matching stats
-        result = self.postgres._verify_import_success(
+        result = self.postgres._verify_upgrade_success(
             original_stats, current_stats, backup_stats
         )
         assert result["success"] is True
 
-    def test_verify_import_success_table_count_mismatch(self):
-        """Test _verify_import_success with table count mismatch."""
+    def test_verify_upgrade_success_table_count_mismatch(self):
+        """Test _verify_upgrade_success with table count mismatch."""
         original_stats = {
             "table_count": 5,
             "database_size": "25 MB",
@@ -674,14 +682,14 @@ class TestPostgresHelperMethods:
 
         backup_stats = {"file_size_bytes": 12345, "estimated_table_count": 5}
 
-        result = self.postgres._verify_import_success(
+        result = self.postgres._verify_upgrade_success(
             original_stats, current_stats, backup_stats
         )
         assert result["success"] is False
         assert any("Table count mismatch" in warning for warning in result["warnings"])
 
-    def test_verify_import_success_significant_row_count_difference(self):
-        """Test _verify_import_success with significant row count difference."""
+    def test_verify_upgrade_success_significant_row_count_difference(self):
+        """Test _verify_upgrade_success with significant row count difference."""
         original_stats = {
             "table_count": 5,
             "database_size": "25 MB",
@@ -696,7 +704,7 @@ class TestPostgresHelperMethods:
 
         backup_stats = {"file_size_bytes": 12345, "estimated_table_count": 5}
 
-        result = self.postgres._verify_import_success(
+        result = self.postgres._verify_upgrade_success(
             original_stats, current_stats, backup_stats
         )
         assert result["success"] is False
@@ -705,8 +713,8 @@ class TestPostgresHelperMethods:
             for warning in result["warnings"]
         )
 
-    def test_display_verification_results(self):
-        """Test _display_verification_results formats data correctly."""
+    def test_display_upgrade_results(self):
+        """Test _display_upgrade_results formats data correctly."""
         verification_data = {
             "success": True,
             "warnings": [],
@@ -718,7 +726,7 @@ class TestPostgresHelperMethods:
 
         # Mock console to capture output
         with patch.object(self.console, "print") as mock_print:
-            self.postgres._display_verification_results(verification_data)
+            self.postgres._display_upgrade_results(verification_data)
 
             # Should have printed verification results
             assert mock_print.call_count >= 3  # At least header + 2 data lines
@@ -729,3 +737,57 @@ class TestPostgresHelperMethods:
             assert "Tables:" in output_text
             assert "Estimated rows:" in output_text
             assert "Database size:" in output_text
+
+
+class TestDisplayImportStats:
+    """Test _display_import_stats method."""
+
+    def setup_method(self):
+        """Set up test fixtures."""
+        self.console = Console()
+        self.postgres = Postgres(self.console)
+
+    @patch("builtins.print")
+    def test_display_import_stats_with_typical_data(self, mock_print):
+        """Test that import stats are displayed correctly."""
+        # Mock console.print to capture output
+        with patch.object(self.postgres.console, "print") as mock_console_print:
+            stats = {
+                "table_count": 10,
+                "estimated_total_rows": 50000,
+                "database_size": "25 MB",
+            }
+
+            self.postgres._display_import_stats(stats)
+
+            # Verify the correct number of print calls
+            assert mock_console_print.call_count == 4  # Header + 3 stat lines
+
+            # Verify the content of the print calls
+            calls = mock_console_print.call_args_list
+            assert "Import statistics:" in str(calls[0])
+            assert "Tables imported: 10" in str(calls[1])
+            assert "Estimated rows: 50000" in str(calls[2])
+            assert "Database size: 25 MB" in str(calls[3])
+
+    @patch("builtins.print")
+    def test_display_import_stats_with_zero_data(self, mock_print):
+        """Test that import stats are displayed correctly for empty database."""
+        # Mock console.print to capture output
+        with patch.object(self.postgres.console, "print") as mock_console_print:
+            stats = {
+                "table_count": 0,
+                "estimated_total_rows": 0,
+                "database_size": "0 B",
+            }
+
+            self.postgres._display_import_stats(stats)
+
+            # Verify the correct number of print calls
+            assert mock_console_print.call_count == 4  # Header + 3 stat lines
+
+            # Verify the content shows zero values
+            calls = mock_console_print.call_args_list
+            assert "Tables imported: 0" in str(calls[1])
+            assert "Estimated rows: 0" in str(calls[2])
+            assert "Database size: 0 B" in str(calls[3])

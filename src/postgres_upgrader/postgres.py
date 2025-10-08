@@ -100,6 +100,14 @@ class Postgres:
             if not file:
                 raise Exception("Backup file selection cancelled")
 
+            # Verify backup integrity before import
+            self.console.print("  Verifying backup integrity...")
+            backup_stats = docker_mgr.verify_backup_integrity(file)
+            self.console.print(
+                f"   Backup verified: {backup_stats['file_size_bytes']} bytes, ~{backup_stats['estimated_table_count']} tables",
+                style="green",
+            )
+
             self._import_workflow_with_container(docker_mgr, container, file, database)
 
     def handle_upgrade_command(self, args) -> None:
@@ -150,10 +158,10 @@ class Postgres:
             container = self._import_workflow(docker_mgr, backup_path, database)
 
             current_stats = docker_mgr.get_database_statistics(container)
-            verification_result = self._verify_import_success(
+            verification_result = self._verify_upgrade_success(
                 original_stats, current_stats, backup_stats
             )
-            self._display_verification_results(verification_result)
+            self._display_upgrade_results(verification_result)
             if verification_result["success"] is False:
                 raise Exception(
                     "PostgreSQL upgrade verification failed. Please review."
@@ -240,6 +248,12 @@ class Postgres:
         )
         docker_mgr.import_data_from_backup(backup_path)
         docker_mgr.update_collation_version()
+
+        # Collect and display import statistics
+        self.console.print("  Collecting database statistics...")
+        current_stats = docker_mgr.get_database_statistics(container)
+        self._display_import_stats(current_stats)
+
         self.console.print("  Import completed successfully!", style="bold green")
 
     def _get_selections(
@@ -315,21 +329,46 @@ class Postgres:
         database = compose_config.get_postgres_db(service_name)
         return user, database
 
-    def _verify_import_success(
+    def _display_import_stats(self, current_stats: dict) -> None:
+        """
+        Display import statistics to the user in a formatted manner.
+
+        Shows basic database statistics after a successful import operation
+        without requiring comparison data from original database or backup files.
+
+        Args:
+            current_stats: Database statistics dictionary from DockerManager.get_database_statistics()
+                          Expected keys:
+                          - table_count (int): Number of tables in the database
+                          - estimated_total_rows (int): Estimated total number of rows
+                          - database_size (str): Human-readable database size
+
+        Note:
+            This method is specifically designed for import operations where
+            verification against original database state is not needed.
+        """
+        self.console.print("     Import statistics:")
+        self.console.print(f"      Tables imported: {current_stats['table_count']}")
+        self.console.print(
+            f"      Estimated rows: {current_stats['estimated_total_rows']}"
+        )
+        self.console.print(f"      Database size: {current_stats['database_size']}")
+
+    def _verify_upgrade_success(
         self, original_stats: dict, current_stats: dict, backup_stats: dict
     ) -> dict:
         """
-        Verify that data import was successful by comparing statistics.
+        Verify that PostgreSQL upgrade was successful by comparing statistics.
 
         Compares current database state against both original database statistics
-        and backup file statistics to ensure data was properly restored. Performs
-        various sanity checks including table count validation, backup size
-        verification, and row count consistency checks.
+        and backup file statistics to ensure data was properly restored during
+        the upgrade process. Performs various sanity checks including table count
+        validation, backup size verification, and row count consistency checks.
 
         Args:
-            original_stats: Statistics from the original database before backup
+            original_stats: Statistics from the original database before upgrade
                            (from DockerManager.get_database_statistics())
-            current_stats: Statistics from the current database after import
+            current_stats: Statistics from the current database after upgrade
                           (from DockerManager.get_database_statistics())
             backup_stats: Statistics from backup file verification
                          (from DockerManager.verify_backup_integrity())
@@ -406,16 +445,18 @@ class Postgres:
             "database_size": current_stats["database_size"],
         }
 
-    def _display_verification_results(self, data: dict):
+    def _display_upgrade_results(self, data: dict):
         """
-        Display verification results to the user in a formatted manner.
+        Display upgrade verification results to the user in a formatted manner.
 
         Outputs either success information with database statistics or
         failure warnings with detailed error messages using Rich console
-        formatting for better readability.
+        formatting for better readability. This method is specifically
+        designed for upgrade operations that compare original, current,
+        and backup statistics.
 
         Args:
-            data: Verification results dictionary from _verify_import_success()
+            data: Verification results dictionary from _verify_upgrade_success()
                  Expected keys:
                  - success (bool): Whether verification passed
                  - warnings (list): List of warning messages (if success=False)
@@ -434,12 +475,12 @@ class Postgres:
                 self.console.print(f"     WARNING: {warning}", style="red")
 
             self.console.print(
-                "Import verification failed - data may not have been restored correctly",
+                "Upgrade verification failed - data may not have been restored correctly",
                 style="bold red",
             )
             return
 
-        self.console.print("     Import verification successful:")
+        self.console.print("     Upgrade verification successful:")
         self.console.print(
             f"      Tables: {data['tables_restored']} (original: {data['original_tables']})"
         )

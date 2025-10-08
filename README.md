@@ -9,7 +9,7 @@ A specialized tool for managing PostgreSQL upgrades in Docker Compose environmen
 - 🖥️ **No File Path Dependencies**: Works from any Docker Compose project directory
 - 📝 **Intuitive Interface**: Interactive prompts with arrow-key navigation
 - 🚀 **Automated Workflow**: Single command performs complete upgrade sequence
-- 🛡️ **Data Verification**: Pre-backup validation and post-import verification to ensure data integrity
+- 🛡️ **Data Verification**: Pre-backup validation, post-upgrade verification for complete workflows, and import statistics for standalone imports
 - 🔧 **Volume Verification**: Two-tier backup volume mounting verification with lightweight Docker API reconnection and container restart fallback
 - 🛡️ **Enhanced Volume Validation**: Strict validation ensures only proper Docker volumes are used, rejecting bind mounts and requiring complete volume definitions for production safety
 - ⚡ **Flexible Commands**: Separate commands for export, import, and full upgrade workflows
@@ -17,8 +17,8 @@ A specialized tool for managing PostgreSQL upgrades in Docker Compose environmen
 - 🔄 **Automated Backup Creation**: With integrity verification before upgrades
 - 🐳 **Docker Image Management**: For new PostgreSQL versions (pull and build)
 - ⚡ **Service Orchestration**: Complete stop/start PostgreSQL container lifecycle
-- 📥 **Backup Import and Restoration**: With comprehensive verification
-- 📊 **Database Statistics Collection**: For upgrade verification
+- 📥 **Backup Import and Restoration**: With comprehensive verification for upgrades and statistics display for imports
+- 📊 **Database Statistics Collection**: For upgrade verification and import monitoring
 - 🎨 **Rich Terminal Output**: With colored progress indicators and status messages
 - ✅ **Well-Tested**: Comprehensive test suite covering error handling, edge cases, integration scenarios, and volume verification
 
@@ -128,9 +128,11 @@ Each command follows these patterns:
 1. Analyze Docker Compose configuration
 2. Prompt for service and volume selection
 3. Start PostgreSQL service container
-4. Verify backup volume mounting
-5. Import data from backup
-6. Update collation version
+4. Verify backup file integrity
+5. Verify backup volume mounting
+6. Import data from backup
+7. Update collation version
+8. Display import statistics
 
 **Upgrade Command (Complete Workflow):**
 
@@ -143,7 +145,7 @@ Each command follows these patterns:
 7. Remove old data volume
 8. Start service with new PostgreSQL version
 9. Verify backup volume mounting
-10. Import data and verify restoration success
+10. Import data and verify upgrade restoration success
 11. Update collation version
 
 ### Example Interactive Output
@@ -163,8 +165,15 @@ Each command follows these patterns:
 Backup created successfully: /tmp/postgresql/backups/backup-20251001_165130.sql
 🔍 Verifying backup integrity...
    Backup verified: 12345 bytes, ~5 tables
-✅ Verifying import success...
-   Import verification successful:
+
+# Import command output:
+   Import statistics:
+      Tables imported: 5
+      Estimated rows: 1000
+      Database size: 25 MB
+
+# Upgrade command output:
+✅ Upgrade verification successful:
       Tables: 5 (original: 5)
       Estimated rows: 1000
       Database size: 25 MB
