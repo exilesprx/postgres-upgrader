@@ -6,7 +6,20 @@ from dataclasses import dataclass, field
 
 @dataclass
 class VolumeMount:
-    """Information about a Docker volume mount."""
+    """
+    Information about a Docker volume mount with strict validation.
+
+    This class ensures production safety by:
+    - Only supporting proper Docker volumes (no bind mounts)
+    - Requiring all fields to be non-None and properly defined
+    - Validating that volumes have resolved names from Docker Compose
+
+    Attributes:
+        name: Volume source name from Docker Compose (e.g., "database")
+        path: Container mount path (e.g., "/var/lib/postgresql/data")
+        raw: Complete volume specification (e.g., "database:/var/lib/postgresql/data")
+        resolved_name: Full Docker volume name with project prefix (e.g., "postgres-updater_database")
+    """
 
     name: str  # e.g., "database"
     path: str  # e.g., "/var/lib/postgresql/data"
@@ -17,7 +30,25 @@ class VolumeMount:
     def from_string(
         cls, volume_config: dict, volume_mappings: Optional[Dict[str, dict]] = None
     ) -> "VolumeMount":
-        """Parse a Docker Compose config dict into a VolumeMount object."""
+        """
+        Parse a Docker Compose config dict into a VolumeMount object.
+
+        Enforces strict validation for production safety:
+        - Only accepts volume type mounts (rejects bind mounts)
+        - Requires complete volume definitions with resolved names
+        - Validates that all required fields are present and non-empty
+
+        Args:
+            volume_config: Docker Compose volume configuration dict
+            volume_mappings: Optional volume name mappings from Docker Compose volumes section
+
+        Returns:
+            VolumeMount: Validated volume mount object
+
+        Raises:
+            ValueError: If volume config is invalid or volume name cannot be resolved
+            Exception: If non-volume mount types are attempted (bind mounts, etc.)
+        """
 
         if volume_config.get("type") == "volume":
             source = volume_config.get("source")
@@ -144,22 +175,30 @@ class DockerComposeConfig:
 
 def parse_docker_compose() -> DockerComposeConfig:
     """
-    Parse Docker Compose configuration using 'docker compose config'.
+    Parse Docker Compose configuration using 'docker compose config' with enhanced validation.
 
     This approach gets the fully resolved configuration with:
     - Environment variables substituted
     - Actual volume names (with prefixes)
     - Real network names
     - All computed values
+    - Strict volume validation (only Docker volumes, no bind mounts)
+
+    The parser enforces production safety by rejecting:
+    - Bind mounts and other non-volume mount types
+    - Volumes without proper definitions in the volumes section
+    - Incomplete volume configurations
 
     Args:
         file_path: Ignored. Kept for API compatibility only.
 
     Returns:
-        DockerComposeConfig with resolved values
+        DockerComposeConfig with resolved and validated values
 
     Raises:
         RuntimeError: If docker compose config fails or Docker Compose not available
+        ValueError: If volume configurations are invalid or missing definitions
+        Exception: If non-volume mount types are found in the configuration
     """
     try:
         result = subprocess.run(

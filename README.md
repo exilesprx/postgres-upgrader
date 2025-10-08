@@ -11,6 +11,7 @@ A specialized tool for managing PostgreSQL upgrades in Docker Compose environmen
 - 🚀 **Automated Workflow**: Single command performs complete upgrade sequence
 - 🛡️ **Data Verification**: Pre-backup validation and post-import verification to ensure data integrity
 - 🔧 **Volume Verification**: Two-tier backup volume mounting verification with lightweight Docker API reconnection and container restart fallback
+- 🛡️ **Enhanced Volume Validation**: Strict validation ensures only proper Docker volumes are used, rejecting bind mounts and requiring complete volume definitions for production safety
 - ⚡ **Flexible Commands**: Separate commands for export, import, and full upgrade workflows
 - 🏗️ **Clean Architecture**: Separation of CLI concerns from business logic for better maintainability and testability
 - 🔄 **Automated Backup Creation**: With integrity verification before upgrades
@@ -194,8 +195,17 @@ The project follows a clean architecture with separation of concerns:
 - **`main.py`**: CLI entry point handling argument parsing and command routing
 - **`postgres.py`**: Business logic orchestration class managing upgrade workflows
 - **`docker.py`**: Docker infrastructure operations and PostgreSQL database interactions
-- **`compose_inspector.py`**: Docker Compose configuration parsing and resolution
+- **`compose_inspector.py`**: Docker Compose configuration parsing and resolution with enhanced volume validation
 - **`prompt.py`**: User interaction and service/volume selection interfaces
+
+#### Volume Validation and Safety
+
+The tool implements strict volume validation to ensure production safety:
+
+- **Volume Type Enforcement**: Only Docker volumes are supported; bind mounts are rejected to prevent accidental host filesystem access
+- **Complete Volume Definitions**: All volume configurations must have resolved names and proper definitions in the Docker Compose volumes section
+- **Early Error Detection**: Configuration validation happens before any Docker operations begin, providing clear error messages for misconfigurations
+- **Production-Safe Defaults**: The validation ensures all volume operations are container-safe and don't accidentally access host directories
 
 ### As a Library
 

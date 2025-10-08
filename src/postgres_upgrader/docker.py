@@ -244,6 +244,11 @@ class DockerManager:
         """
         Verify that the backup volume is properly mounted and accessible.
 
+        Performs validation to ensure the backup volume configuration is valid:
+        - Checks that backup volume is selected and properly configured
+        - Validates that backup volume has a non-empty path
+        - Uses VolumeMount validation to ensure production safety
+
         Uses a two-tier retry strategy to handle intermittent Docker Compose
         volume mounting issues:
         1. First tier: Lightweight volume reconnection using Docker API
@@ -260,10 +265,13 @@ class DockerManager:
 
         Raises:
             Exception: If backup volume is not accessible after all retry attempts
+            Exception: If backup volume is not selected or has invalid configuration
+            Exception: If backup directory is not found in configuration
 
         Note:
             The two-tier approach minimizes downtime by trying lightweight fixes
-            before resorting to more disruptive container restarts.
+            before resorting to more disruptive container restarts. Volume validation
+            ensures only properly configured Docker volumes are used.
         """
         if not self.service_config.is_configured_for_postgres_upgrade():
             raise Exception("Service must have selected volumes for PostgreSQL upgrade")
