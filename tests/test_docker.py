@@ -940,7 +940,10 @@ class TestDockerManagerVolumeVerification:
                     )
 
     @patch("postgres_upgrader.docker.subprocess.run")
-    def test_verify_backup_volume_mounted_with_container_restart(self, mock_subprocess):
+    @patch("postgres_upgrader.docker.time.sleep")  # Mock sleep to avoid delays
+    def test_verify_backup_volume_mounted_with_container_restart(
+        self, mock_sleep, mock_subprocess
+    ):
         """Test container restart functionality during volume verification."""
         with patch("postgres_upgrader.docker.docker.from_env") as mock_docker:
             mock_client = MagicMock()
@@ -1013,7 +1016,10 @@ class TestDockerManagerVolumeVerification:
                 assert actual_calls == expected_calls
 
     @patch("postgres_upgrader.docker.subprocess.run")
-    def test_verify_backup_volume_mounted_restart_failure(self, mock_subprocess):
+    @patch("postgres_upgrader.docker.time.sleep")  # Mock sleep to avoid delays
+    def test_verify_backup_volume_mounted_restart_failure(
+        self, mock_sleep, mock_subprocess
+    ):
         """Test handling of container restart failures."""
         with patch("postgres_upgrader.docker.docker.from_env") as mock_docker:
             mock_client = MagicMock()
