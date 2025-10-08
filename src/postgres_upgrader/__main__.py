@@ -15,9 +15,10 @@ def main() -> None:
     # Add project root to path so we can import main
     project_root = Path(__file__).parent.parent.parent
     sys.path.insert(0, str(project_root))
-    
+
     # Import and run the main CLI
-    from main import main as cli_main
+    from main import main as cli_main  # noqa: PLC0415
+
     cli_main()
 
 

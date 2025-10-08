@@ -256,9 +256,12 @@ class TestHandleUpgradeCommand:
         mock_identify.return_value = mock_service
 
         # Mock _get_credentials to return None for user
-        with patch.object(
-            self.postgres, "_get_credentials", return_value=(None, "testdb")
-        ), pytest.raises(Exception) as exc_info:
+        with (
+            patch.object(
+                self.postgres, "_get_credentials", return_value=(None, "testdb")
+            ),
+            pytest.raises(Exception) as exc_info,
+        ):
             self.postgres.handle_upgrade_command(Mock())
 
         assert (
@@ -281,9 +284,12 @@ class TestHandleUpgradeCommand:
         mock_identify.return_value = mock_service
 
         # Mock _get_credentials to return None for database
-        with patch.object(
-            self.postgres, "_get_credentials", return_value=("testuser", None)
-        ), pytest.raises(Exception) as exc_info:
+        with (
+            patch.object(
+                self.postgres, "_get_credentials", return_value=("testuser", None)
+            ),
+            pytest.raises(Exception) as exc_info,
+        ):
             self.postgres.handle_upgrade_command(Mock())
 
         assert (
@@ -307,9 +313,12 @@ class TestHandleUpgradeCommand:
 
         mock_prompt.return_value = None
 
-        with patch.object(
-            self.postgres, "_get_credentials", return_value=("testuser", "testdb")
-        ), pytest.raises(Exception) as exc_info:
+        with (
+            patch.object(
+                self.postgres, "_get_credentials", return_value=("testuser", "testdb")
+            ),
+            pytest.raises(Exception) as exc_info,
+        ):
             self.postgres.handle_upgrade_command(Mock())
 
         assert "A valid container user is required to proceed" in str(exc_info.value)
@@ -403,9 +412,12 @@ class TestHandleUpgradeCommand:
         )
         mock_docker_manager.return_value.__enter__.return_value = mock_docker_instance
 
-        with patch.object(
-            self.postgres, "_get_credentials", return_value=("testuser", "testdb")
-        ), pytest.raises(Exception) as exc_info:
+        with (
+            patch.object(
+                self.postgres, "_get_credentials", return_value=("testuser", "testdb")
+            ),
+            pytest.raises(Exception) as exc_info,
+        ):
             self.postgres.handle_upgrade_command(Mock())
 
         assert "Docker upgrade failed" in str(exc_info.value)
@@ -577,9 +589,12 @@ class TestPostgresIntegration:
 
         mock_prompt.return_value = ""  # Empty string
 
-        with patch.object(
-            self.postgres, "_get_credentials", return_value=("testuser", "testdb")
-        ), pytest.raises(Exception) as exc_info:
+        with (
+            patch.object(
+                self.postgres, "_get_credentials", return_value=("testuser", "testdb")
+            ),
+            pytest.raises(Exception) as exc_info,
+        ):
             self.postgres.handle_upgrade_command(Mock())
 
         assert "A valid container user is required to proceed" in str(exc_info.value)

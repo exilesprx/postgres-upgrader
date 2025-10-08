@@ -11,7 +11,7 @@ from postgres_upgrader import (
     DockerComposeConfig,
     parse_docker_compose,
 )
-from postgres_upgrader.compose_inspector import VolumeMount
+from postgres_upgrader.compose_inspector import ServiceConfig, VolumeMount
 
 # Mock docker compose config output
 MOCK_DOCKER_COMPOSE_CONFIG = """
@@ -212,7 +212,6 @@ class TestVolumeValidation:
 
     def test_valid_volume_configuration(self):
         """Test that valid volume configuration passes validation."""
-        from postgres_upgrader.compose_inspector import ServiceConfig
 
         service = ServiceConfig(name="test")
         main_vol = VolumeMount(
@@ -233,7 +232,6 @@ class TestVolumeValidation:
 
     def test_same_volume_configuration(self):
         """Test that same volume for main and backup fails validation."""
-        from postgres_upgrader.compose_inspector import ServiceConfig
 
         service = ServiceConfig(name="test")
         same_vol = VolumeMount(
@@ -248,7 +246,6 @@ class TestVolumeValidation:
 
     def test_nested_path_configuration(self):
         """Test that backup volume inside main volume fails validation."""
-        from postgres_upgrader.compose_inspector import ServiceConfig
 
         service = ServiceConfig(name="test")
         main_vol = VolumeMount(
@@ -269,7 +266,6 @@ class TestVolumeValidation:
 
     def test_no_volumes_selected(self):
         """Test that no volumes selected fails validation."""
-        from postgres_upgrader.compose_inspector import ServiceConfig
 
         service = ServiceConfig(name="test")
 
@@ -277,7 +273,6 @@ class TestVolumeValidation:
 
     def test_only_main_volume_selected(self):
         """Test that only main volume selected fails validation."""
-        from postgres_upgrader.compose_inspector import ServiceConfig
 
         service = ServiceConfig(name="test")
         main_vol = VolumeMount(
@@ -297,7 +292,6 @@ class TestVolumeValidationEdgeCases:
 
     def test_backup_volume_is_postgres_data_directory(self):
         """Test that using PostgreSQL data directory as backup raises exception."""
-        from postgres_upgrader.compose_inspector import ServiceConfig
 
         service = ServiceConfig(name="test")
         main_vol = VolumeMount(
@@ -323,7 +317,6 @@ class TestVolumeValidationEdgeCases:
 
     def test_backup_volume_exact_match_main_volume_path(self):
         """Test that backup volume with exact same path as main volume fails."""
-        from postgres_upgrader.compose_inspector import ServiceConfig
 
         service = ServiceConfig(name="test")
         main_vol = VolumeMount(
@@ -344,7 +337,6 @@ class TestVolumeValidationEdgeCases:
 
     def test_paths_with_trailing_slashes(self):
         """Test volume validation handles trailing slashes correctly."""
-        from postgres_upgrader.compose_inspector import ServiceConfig
 
         service = ServiceConfig(name="test")
         main_vol = VolumeMount(
@@ -365,7 +357,6 @@ class TestVolumeValidationEdgeCases:
 
     def test_nested_path_with_trailing_slashes(self):
         """Test nested path detection works with trailing slashes."""
-        from postgres_upgrader.compose_inspector import ServiceConfig
 
         service = ServiceConfig(name="test")
         main_vol = VolumeMount(
@@ -386,7 +377,6 @@ class TestVolumeValidationEdgeCases:
 
     def test_backup_volume_parent_of_main_volume(self):
         """Test that backup volume as parent of main volume is allowed."""
-        from postgres_upgrader.compose_inspector import ServiceConfig
 
         service = ServiceConfig(name="test")
         main_vol = VolumeMount(
@@ -408,7 +398,6 @@ class TestVolumeValidationEdgeCases:
 
     def test_volumes_with_none_paths(self):
         """Test volume validation handles None paths gracefully."""
-        from postgres_upgrader.compose_inspector import ServiceConfig
 
         service = ServiceConfig(name="test")
         main_vol = VolumeMount(
@@ -430,7 +419,6 @@ class TestVolumeValidationEdgeCases:
 
     def test_mixed_none_and_valid_paths(self):
         """Test validation with one None path and one valid path."""
-        from postgres_upgrader.compose_inspector import ServiceConfig
 
         service = ServiceConfig(name="test")
         main_vol = VolumeMount(
@@ -451,7 +439,6 @@ class TestVolumeValidationEdgeCases:
 
     def test_empty_string_paths(self):
         """Test volume validation handles empty string paths."""
-        from postgres_upgrader.compose_inspector import ServiceConfig
 
         service = ServiceConfig(name="test")
         main_vol = VolumeMount(
@@ -473,7 +460,6 @@ class TestVolumeValidationEdgeCases:
 
     def test_single_character_paths(self):
         """Test volume validation with single character paths."""
-        from postgres_upgrader.compose_inspector import ServiceConfig
 
         service = ServiceConfig(name="test")
         main_vol = VolumeMount(
@@ -495,7 +481,6 @@ class TestVolumeValidationEdgeCases:
 
     def test_complex_nested_paths(self):
         """Test complex nested path scenarios."""
-        from postgres_upgrader.compose_inspector import ServiceConfig
 
         service = ServiceConfig(name="test")
         main_vol = VolumeMount(
@@ -516,7 +501,6 @@ class TestVolumeValidationEdgeCases:
 
     def test_similar_but_not_nested_paths(self):
         """Test paths that look similar but are not nested."""
-        from postgres_upgrader.compose_inspector import ServiceConfig
 
         service = ServiceConfig(name="test")
         main_vol = VolumeMount(
@@ -538,7 +522,6 @@ class TestVolumeValidationEdgeCases:
 
     def test_unicode_paths(self):
         """Test volume validation with Unicode characters in paths."""
-        from postgres_upgrader.compose_inspector import ServiceConfig
 
         service = ServiceConfig(name="test")
         main_vol = VolumeMount(
@@ -559,7 +542,6 @@ class TestVolumeValidationEdgeCases:
 
     def test_windows_style_paths(self):
         """Test volume validation with Windows-style paths (for completeness)."""
-        from postgres_upgrader.compose_inspector import ServiceConfig
 
         service = ServiceConfig(name="test")
         main_vol = VolumeMount(
@@ -580,7 +562,6 @@ class TestVolumeValidationEdgeCases:
 
     def test_very_long_paths(self):
         """Test volume validation with very long paths."""
-        from postgres_upgrader.compose_inspector import ServiceConfig
 
         service = ServiceConfig(name="test")
         long_path = "/very/long/path/that/goes/on/and/on/and/on/postgresql/data"
@@ -602,7 +583,6 @@ class TestVolumeValidationEdgeCases:
 
     def test_root_filesystem_edge_case(self):
         """Test edge case with root filesystem paths that should be valid."""
-        from postgres_upgrader.compose_inspector import ServiceConfig
 
         service = ServiceConfig(name="test")
         main_vol = VolumeMount(
@@ -624,7 +604,6 @@ class TestVolumeValidationEdgeCases:
 
     def test_path_normalization_edge_cases(self):
         """Test that path normalization handles edge cases correctly."""
-        from postgres_upgrader.compose_inspector import ServiceConfig
 
         service = ServiceConfig(name="test")
         main_vol = VolumeMount(
@@ -646,7 +625,6 @@ class TestVolumeValidationEdgeCases:
 
     def test_volume_name_vs_path_different_logic(self):
         """Test that volume name comparison and path comparison are handled separately."""
-        from postgres_upgrader.compose_inspector import ServiceConfig
 
         service = ServiceConfig(name="test")
         # Same name = invalid regardless of path
@@ -673,7 +651,6 @@ class TestDockerComposeConfigMethods:
 
     def setup_method(self):
         """Set up test fixtures."""
-        from postgres_upgrader.compose_inspector import ServiceConfig
 
         # Create a realistic Docker Compose config for testing
         postgres_service = ServiceConfig(

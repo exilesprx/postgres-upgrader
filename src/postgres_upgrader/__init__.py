@@ -26,15 +26,12 @@ from .docker import DockerManager
 from .prompt import identify_service_volumes, prompt_container_user, prompt_user_choice
 
 __all__ = [
-    # Compose inspector functions
-    "parse_docker_compose",
     "DockerComposeConfig",
+    "DockerManager",
     "ServiceConfig",
     "VolumeMount",
-    # User interaction functions
-    "prompt_user_choice",
     "identify_service_volumes",
+    "parse_docker_compose",
     "prompt_container_user",
-    # Docker operations
-    "DockerManager",
+    "prompt_user_choice",
 ]

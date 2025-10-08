@@ -140,10 +140,7 @@ class ServiceConfig:
                 "You cannot use the default PostgreSQL data directory as a backup location. It will remove all existing data!"
             )
 
-        if backup_path.startswith(main_path + "/") or backup_path == main_path:
-            return False
-
-        return True
+        return not (backup_path.startswith(main_path + "/") or backup_path == main_path)
 
 
 @dataclass

@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Union
 
 import inquirer
 
@@ -40,7 +40,7 @@ def prompt_user_choice(
 
 def identify_service_volumes(
     data: "DockerComposeConfig",
-) -> Optional["ServiceConfig"]:
+) -> Union["ServiceConfig", None]:
     """
     Interactive service and volume identification with user prompts.
 

@@ -1,7 +1,7 @@
 import subprocess
 import time
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Union
 
 import docker
 from docker.models.containers import Container
@@ -130,7 +130,7 @@ class DockerManager:
         try:
             subprocess.run(["docker", "compose", "stop", service_name], check=True)
         except subprocess.CalledProcessError as e:
-            raise Exception(f"Failed to stop service {service_name}: {e}")
+            raise Exception(f"Failed to stop service {service_name}: {e}") from e
 
     def remove_service_container(self):
         """
@@ -147,7 +147,7 @@ class DockerManager:
         try:
             subprocess.run(["docker", "compose", "rm", service_name], check=True)
         except subprocess.CalledProcessError as e:
-            raise Exception(f"Failed to remove service {service_name}: {e}")
+            raise Exception(f"Failed to remove service {service_name}: {e}") from e
 
     def update_service_container(self):
         """
@@ -164,7 +164,7 @@ class DockerManager:
         try:
             subprocess.run(["docker", "compose", "pull", service_name], check=True)
         except subprocess.CalledProcessError as e:
-            raise Exception(f"Failed to update service {service_name}: {e}")
+            raise Exception(f"Failed to update service {service_name}: {e}") from e
 
     def build_service_container(self):
         """
@@ -181,7 +181,7 @@ class DockerManager:
         try:
             subprocess.run(["docker", "compose", "build", service_name], check=True)
         except subprocess.CalledProcessError as e:
-            raise Exception(f"Failed to build service {service_name}: {e}")
+            raise Exception(f"Failed to build service {service_name}: {e}") from e
 
     def remove_service_main_volume(self):
         """
@@ -212,7 +212,7 @@ class DockerManager:
                 ["docker", "volume", "rm", main_volume.resolved_name], check=True
             )
         except subprocess.CalledProcessError as e:
-            raise Exception(f"Failed to remove volume {main_volume.name}: {e}")
+            raise Exception(f"Failed to remove volume {main_volume.name}: {e}") from e
 
     def start_service_container(self) -> Container:
         """
@@ -236,7 +236,7 @@ class DockerManager:
             _ = self.check_container_status(container)
 
         except subprocess.CalledProcessError as e:
-            raise Exception(f"Failed to restart service {service_name}: {e}")
+            raise Exception(f"Failed to restart service {service_name}: {e}") from e
 
         return container
 
@@ -667,7 +667,7 @@ class DockerManager:
         }
 
     def _force_volume_reconnect(
-        self, container: Container, backup_volume: Optional["VolumeMount"]
+        self, container: Container, backup_volume: Union["VolumeMount", None]
     ):
         """
         Force volume reconnection without full container restart.
@@ -706,10 +706,10 @@ class DockerManager:
             container.reload()
 
         except Exception as e:
-            raise Exception(f"Volume reconnection failed: {e}")
+            raise Exception(f"Volume reconnection failed: {e}") from e
 
     def _check_backup_volume_health(
-        self, container, backup_volume: Optional["VolumeMount"]
+        self, container, backup_volume: Union["VolumeMount", None]
     ) -> bool:
         """
         Check if the backup volume is properly mounted and accessible.
@@ -744,7 +744,4 @@ class DockerManager:
         exit_code, _ = container.exec_run(
             ["ls", "-la", backup_volume.path], user=self.container_user
         )
-        if exit_code == 0 and mount_found:
-            return True
-
-        return False
+        return bool(exit_code == 0 and mount_found)

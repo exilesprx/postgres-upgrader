@@ -39,7 +39,7 @@ class Postgres:
         """
         self.console = console
 
-    def handle_export_command(self, args) -> None:
+    def handle_export_command(self, _args) -> None:
         """
         Handle the export command to create a PostgreSQL backup.
 
@@ -65,7 +65,7 @@ class Postgres:
         ) as docker_mgr:
             _, _, _ = self._create_backup_workflow(docker_mgr)
 
-    def handle_import_command(self, args) -> None:
+    def handle_import_command(self, _args) -> None:
         """
         Handle the import command to restore data from a PostgreSQL backup.
 
@@ -112,7 +112,7 @@ class Postgres:
 
             self._import_workflow_with_container(docker_mgr, container, file, database)
 
-    def handle_upgrade_command(self, args) -> None:
+    def handle_upgrade_command(self, _args) -> None:
         """
         Execute the complete PostgreSQL upgrade workflow.
 
@@ -287,7 +287,7 @@ class Postgres:
             raise Exception(
                 f"Error getting Docker Compose configuration: {e}. "
                 "Make sure you're in a directory with a docker-compose.yml file and Docker Compose is installed."
-            )
+            ) from e
 
         selected_service = identify_service_volumes(compose_config)
         if not selected_service:
@@ -324,8 +324,8 @@ class Postgres:
 
         Returns:
             tuple: A 2-tuple containing:
-                - Optional[str]: PostgreSQL username (None if not found)
-                - Optional[str]: PostgreSQL database name (None if not found)
+                - str | None: PostgreSQL username (None if not found)
+                - str | None: PostgreSQL database name (None if not found)
         """
         user = compose_config.get_postgres_user(service_name)
         database = compose_config.get_postgres_db(service_name)
@@ -419,8 +419,11 @@ class Postgres:
             success = False
 
         # Verify backup file wasn't suspiciously small
+        MIN_BACKUP_SIZE_BYTES = (
+            1000  # Less than 1KB seems too small for a database with tables
+        )
         backup_size = backup_stats.get("file_size_bytes", 0)
-        if original_tables > 0 and backup_size < 1000:  # Less than 1KB seems too small
+        if original_tables > 0 and backup_size < MIN_BACKUP_SIZE_BYTES:
             verification_warnings.append(
                 f"Backup file is suspiciously small ({backup_size} bytes) for a database with {original_tables} tables"
             )
