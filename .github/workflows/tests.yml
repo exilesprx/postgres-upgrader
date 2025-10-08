@@ -1,26 +1,41 @@
-name: Quality Checks
+name: CI/CD Pipeline
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
-  tests:
+  quality-checks:
     runs-on: ubuntu-latest
-    container:
-      image: python:3.13-slim
-    name: Tests
+    strategy:
+      matrix:
+        python-version: ["3.13"]
+
+    name: Quality Checks (Python ${{ matrix.python-version }})
     steps:
       - uses: actions/checkout@v4
 
       - name: Install UV
         run: pip install uv
 
-      - name: Install packages
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Install dependencies
         run: |
           uv lock --check
-          uv sync
+          uv sync --all-extras --dev
 
-      - name: Run tests
-        run: uv run pytest --tb=short --quiet
+      - name: Lint with Ruff
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+      - name: Type check with mypy
+        run: uv run mypy src/postgres_upgrader
+
+      - name: Run tests with coverage
+        run: |
+          uv run pytest --cov=postgres_upgrader --cov-report=xml --cov-report=term-missing --tb=short

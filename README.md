@@ -20,32 +20,47 @@ A specialized tool for managing PostgreSQL upgrades in Docker Compose environmen
 - 📥 **Backup Import and Restoration**: With comprehensive verification for upgrades and statistics display for imports
 - 📊 **Database Statistics Collection**: For upgrade verification and import monitoring
 - 🎨 **Rich Terminal Output**: With colored progress indicators and status messages
-- ✅ **Well-Tested**: Comprehensive test suite covering error handling, edge cases, integration scenarios, and volume verification
+- ✅ **Well-Tested**: Comprehensive test suite covering error handling, edge cases, and volume verification
 
 ## Installation
 
-### With uv (recommended)
+### From Source
+
+#### With uv (recommended for development)
 
 ```bash
 git clone https://github.com/exilesprx/postgres-upgrader
 cd postgres-upgrader
-uv sync
+uv sync --dev
 ```
 
-### With pip
+#### With pip
 
 ```bash
 git clone https://github.com/exilesprx/postgres-upgrader
 cd postgres-upgrader
-pip install -e .
+pip install -e .[dev]
 ```
 
-### With poetry
+#### With poetry
 
 ```bash
 git clone https://github.com/exilesprx/postgres-upgrader
 cd postgres-upgrader
-poetry install
+poetry install --with dev
+```
+
+### Verify Installation
+
+```bash
+# Check if the tool works (console script)
+uv run postgres-upgrader --help
+
+# Or with main.py entry point
+uv run main.py --help
+
+# Or with package entry point
+uv run python -m postgres_upgrader --help
 ```
 
 ## Usage
@@ -74,41 +89,53 @@ The tool provides three main commands for different workflow needs:
 # Navigate to your Docker Compose project directory
 cd /path/to/your/docker-compose-project
 
-# Run complete upgrade workflow
+# Run complete upgrade workflow (console script)
+uv run postgres-upgrader upgrade
+
+# Or with main.py entry point
 uv run main.py upgrade
 
-# Or after installation with pip/poetry
-python -m postgres_upgrader upgrade
+# Or use package entry point
+uv run python -m postgres_upgrader upgrade
 ```
 
 #### Export Database Backup Only
 
 ```bash
-# Create backup without performing upgrade
+# Create backup without performing upgrade (console script)
+uv run postgres-upgrader export
+
+# Or with main.py entry point
 uv run main.py export
 
-# Or after installation
-python -m postgres_upgrader export
+# Package entry point
+uv run python -m postgres_upgrader export
 ```
 
 #### Import from Existing Backup
 
 ```bash
-# Import data from existing backup
+# Import data from existing backup (console script)
+uv run postgres-upgrader import
+
+# Or with main.py entry point
 uv run main.py import
 
-# Or after installation
-python -m postgres_upgrader import
+# Package entry point
+uv run python -m postgres_upgrader import
 ```
 
 #### Help and Available Commands
 
 ```bash
-# Show all available commands
+# Show all available commands (console script)
+uv run postgres-upgrader --help
+
+# Or with main.py entry point
 uv run main.py --help
 
-# Show help for specific command
-uv run main.py upgrade --help
+# Package entry point
+uv run python -m postgres_upgrader --help
 ```
 
 ### Workflow Details
@@ -369,7 +396,7 @@ postgres-upgrader/
 │   ├── test_docker.py              # Docker infrastructure tests (including volume verification)
 │   ├── test_parse_docker_compose.py  # Config resolution tests
 │   ├── test_postgres.py            # Business logic orchestration tests
-│   ├── test_subprocess_integration.py # Docker Compose subprocess integration tests
+│   ├── test_subprocess_integration.py # Docker Compose subprocess tests
 │   └── test_user_interaction.py    # User interaction tests
 ├── main.py                        # CLI entry point with command parsing
 ├── pyproject.toml                 # Project configuration
@@ -388,13 +415,7 @@ postgres-upgrader/
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Run tests (`uv run pytest`)
-5. Commit your changes (`git commit -m 'Add amazing feature'`)
-6. Push to the branch (`git push origin feature/amazing-feature`)
-7. Open a Pull Request
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines on how to contribute to this project.
 
 ## License
 
