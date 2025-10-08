@@ -90,12 +90,18 @@ class TestHandleImportCommand:
         self.console = Console()
         self.postgres = Postgres(self.console)
 
+    @patch("postgres_upgrader.postgres.prompt_user_choice")
     @patch("postgres_upgrader.postgres.DockerManager")
     @patch("postgres_upgrader.postgres.prompt_container_user")
     @patch("postgres_upgrader.postgres.identify_service_volumes")
     @patch("postgres_upgrader.postgres.parse_docker_compose")
     def test_handle_import_command_successful_workflow(
-        self, mock_parse, mock_identify, mock_prompt, mock_docker_manager
+        self,
+        mock_parse,
+        mock_identify,
+        mock_prompt,
+        mock_docker_manager,
+        mock_prompt_choice,
     ):
         """Test that handle_import_command executes successfully."""
         # Setup mocks
@@ -106,29 +112,47 @@ class TestHandleImportCommand:
         mock_service = Mock()
         mock_service.name = "postgres"
         mock_service.is_configured_for_postgres_upgrade.return_value = True
+        mock_backup_volume = Mock()
+        mock_service.get_backup_volume.return_value = mock_backup_volume
         mock_identify.return_value = mock_service
 
         mock_prompt.return_value = "postgres"
+
+        # Mock file selection
+        mock_prompt_choice.return_value = "backup_file.sql"
 
         # Mock DockerManager and its methods
         mock_docker_instance = Mock()
         mock_container = Mock()
         mock_docker_instance.start_service_container.return_value = mock_container
+        mock_docker_instance.list_files_in_volume.return_value = [
+            "backup_file.sql",
+            "another_backup.sql",
+        ]
         mock_docker_manager.return_value.__enter__.return_value = mock_docker_instance
 
-        with patch.object(
-            self.postgres, "_get_credentials", return_value=("testuser", "testdb")
+        with (
+            patch.object(
+                self.postgres, "_get_credentials", return_value=("testuser", "testdb")
+            ),
+            patch.object(
+                self.postgres, "_import_workflow_with_container"
+            ) as mock_import_workflow,
         ):
             # Should not raise any exceptions
             self.postgres.handle_import_command(Mock())
 
         # Verify the expected calls were made
         mock_docker_instance.start_service_container.assert_called_once()
-        mock_docker_instance.verify_backup_volume_mounted.assert_called_once_with(
-            container=mock_container
+        mock_docker_instance.list_files_in_volume.assert_called_once_with(
+            mock_container, mock_backup_volume
         )
-        mock_docker_instance.import_data_from_backup.assert_called_once_with("")
-        mock_docker_instance.update_collation_version.assert_called_once()
+        mock_prompt_choice.assert_called_once_with(
+            ["backup_file.sql", "another_backup.sql"], "Select a backup file to import:"
+        )
+        mock_import_workflow.assert_called_once_with(
+            mock_docker_instance, mock_container, "backup_file.sql", "testdb"
+        )
 
 
 class TestHandleUpgradeCommand:

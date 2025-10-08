@@ -502,7 +502,8 @@ class TestDockerManagerIntegration:
                 # Test individual Docker operations that support the upgrade workflow
 
                 # Test database statistics collection
-                stats = docker_mgr.get_database_statistics()
+                container = docker_mgr.find_container_by_service()
+                stats = docker_mgr.get_database_statistics(container)
                 assert stats["table_count"] == 5
                 assert stats["estimated_total_rows"] == 1000
                 assert stats["database_size"] == "25 MB"
