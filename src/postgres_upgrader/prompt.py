@@ -1,4 +1,5 @@
-from typing import List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
+
 import inquirer
 
 if TYPE_CHECKING:
@@ -6,8 +7,8 @@ if TYPE_CHECKING:
 
 
 def prompt_user_choice(
-    choices: List[str], prompt_message: str = "Please select an option:"
-) -> Optional[str]:
+    choices: list[str], prompt_message: str = "Please select an option:"
+) -> str | None:
     """
     Prompt user to select from a list of choices using inquirer with text fallback.
 
@@ -95,7 +96,7 @@ def identify_service_volumes(
     return service
 
 
-def prompt_container_user() -> Optional[str]:
+def prompt_container_user() -> str | None:
     """
     Prompt user to input a container user (e.g., 'postgres').
 

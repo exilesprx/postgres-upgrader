@@ -1,7 +1,7 @@
-import yaml
 import subprocess
-from typing import Dict, List, Optional
 from dataclasses import dataclass, field
+
+import yaml
 
 
 @dataclass
@@ -28,7 +28,7 @@ class VolumeMount:
 
     @classmethod
     def from_string(
-        cls, volume_config: dict, volume_mappings: Optional[Dict[str, dict]] = None
+        cls, volume_config: dict, volume_mappings: dict[str, dict] | None = None
     ) -> "VolumeMount":
         """
         Parse a Docker Compose config dict into a VolumeMount object.
@@ -78,11 +78,11 @@ class ServiceConfig:
     """Configuration for a Docker Compose service."""
 
     name: str
-    environment: Dict[str, str] = field(default_factory=dict)
-    volumes: List[VolumeMount] = field(default_factory=list)
+    environment: dict[str, str] = field(default_factory=dict)
+    volumes: list[VolumeMount] = field(default_factory=list)
     # User-selected volumes for PostgreSQL operations
-    selected_main_volume: Optional[VolumeMount] = None
-    selected_backup_volume: Optional[VolumeMount] = None
+    selected_main_volume: VolumeMount | None = None
+    selected_backup_volume: VolumeMount | None = None
 
     def select_volumes(
         self, main_volume: VolumeMount, backup_volume: VolumeMount
@@ -91,7 +91,7 @@ class ServiceConfig:
         self.selected_main_volume = main_volume
         self.selected_backup_volume = backup_volume
 
-    def get_main_volume_resolved_name(self) -> Optional[str]:
+    def get_main_volume_resolved_name(self) -> str | None:
         """Get the resolved name of the selected main volume."""
         return (
             self.selected_main_volume.resolved_name
@@ -99,11 +99,11 @@ class ServiceConfig:
             else None
         )
 
-    def get_main_volume(self) -> Optional[VolumeMount]:
+    def get_main_volume(self) -> VolumeMount | None:
         """Get the selected main volume."""
         return self.selected_main_volume
 
-    def get_backup_volume(self) -> Optional[VolumeMount]:
+    def get_backup_volume(self) -> VolumeMount | None:
         """Get the selected backup volume."""
         return self.selected_backup_volume
 
@@ -135,7 +135,7 @@ class ServiceConfig:
         backup_path = backup_path.rstrip("/")
 
         # Docker standard PostgreSQL data directory check
-        if "/var/lib/postgresql/data" == backup_path:
+        if backup_path == "/var/lib/postgresql/data":
             raise Exception(
                 "You cannot use the default PostgreSQL data directory as a backup location. It will remove all existing data!"
             )
@@ -150,24 +150,24 @@ class ServiceConfig:
 class DockerComposeConfig:
     """Parsed Docker Compose configuration."""
 
-    name: Optional[str]
-    services: Dict[str, ServiceConfig] = field(default_factory=dict)
+    name: str | None
+    services: dict[str, ServiceConfig] = field(default_factory=dict)
 
-    def get_service(self, name: str) -> Optional[ServiceConfig]:
+    def get_service(self, name: str) -> ServiceConfig | None:
         """Get a service by name."""
         return self.services.get(name)
 
-    def get_volumes(self, service_name: str) -> List[VolumeMount]:
+    def get_volumes(self, service_name: str) -> list[VolumeMount]:
         """Get list of volume mounts for a specific service."""
         service = self.get_service(service_name)
         return service.volumes if service else []
 
-    def get_postgres_user(self, service_name: str) -> Optional[str]:
+    def get_postgres_user(self, service_name: str) -> str | None:
         """Get PostgreSQL user from service environment."""
         service = self.get_service(service_name)
         return service.environment.get("POSTGRES_USER") if service else None
 
-    def get_postgres_db(self, service_name: str) -> Optional[str]:
+    def get_postgres_db(self, service_name: str) -> str | None:
         """Get PostgreSQL database from service environment."""
         service = self.get_service(service_name)
         return service.environment.get("POSTGRES_DB") if service else None

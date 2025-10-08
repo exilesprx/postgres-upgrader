@@ -5,12 +5,14 @@ This module contains the core business logic for PostgreSQL upgrades
 using Docker Compose, separated from CLI concerns.
 """
 
-from rich.console import Console
-from typing import Tuple, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
+
 from docker.models.containers import Container
+from rich.console import Console
+
 from . import (
-    identify_service_volumes,
     DockerManager,
+    identify_service_volumes,
     parse_docker_compose,
     prompt_container_user,
     prompt_user_choice,
@@ -309,7 +311,7 @@ class Postgres:
 
     def _get_credentials(
         self, compose_config: "DockerComposeConfig", service_name: str
-    ) -> Tuple[Optional[str], Optional[str]]:
+    ) -> tuple[str | None, str | None]:
         """
         Get PostgreSQL credentials from resolved Docker Compose configuration.
 

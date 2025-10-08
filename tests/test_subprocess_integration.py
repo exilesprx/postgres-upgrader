@@ -3,11 +3,13 @@ Tests for subprocess and Docker Compose integration.
 Tests the interaction with docker compose CLI and subprocess calls.
 """
 
-import pytest
 import subprocess
+from unittest.mock import MagicMock, patch
+
+import pytest
 import yaml
-from unittest.mock import patch, MagicMock
-from postgres_upgrader import parse_docker_compose, DockerComposeConfig
+
+from postgres_upgrader import DockerComposeConfig, parse_docker_compose
 
 
 class TestDockerComposeSubprocessIntegration:

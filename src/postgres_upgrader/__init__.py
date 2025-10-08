@@ -17,13 +17,13 @@ Main components:
 """
 
 from .compose_inspector import (
-    parse_docker_compose,
     DockerComposeConfig,
     ServiceConfig,
     VolumeMount,
+    parse_docker_compose,
 )
-from .prompt import prompt_user_choice, identify_service_volumes, prompt_container_user
 from .docker import DockerManager
+from .prompt import identify_service_volumes, prompt_container_user, prompt_user_choice
 
 __all__ = [
     # Compose inspector functions

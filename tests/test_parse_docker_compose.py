@@ -3,14 +3,15 @@ Tests for Docker Compose parsing functionality.
 Tests the actual building blocks that the application uses.
 """
 
-import pytest
 from unittest.mock import patch
+
+import pytest
+
 from postgres_upgrader import (
-    parse_docker_compose,
     DockerComposeConfig,
+    parse_docker_compose,
 )
 from postgres_upgrader.compose_inspector import VolumeMount
-
 
 # Mock docker compose config output
 MOCK_DOCKER_COMPOSE_CONFIG = """

@@ -2,10 +2,12 @@
 Tests for Docker operations and container management.
 """
 
-import pytest
 import subprocess
-import docker
 from unittest.mock import MagicMock, patch
+
+import docker
+import pytest
+
 from postgres_upgrader import DockerManager, ServiceConfig, VolumeMount
 
 
@@ -47,22 +49,20 @@ class TestDockerManager:
             # Should raise exception when no containers found - using new API
             with DockerManager(
                 "test_project", service_config, "postgres", "testuser", "testdb"
-            ) as docker_mgr:
-                with pytest.raises(Exception, match="No containers found"):
-                    docker_mgr.create_postgres_backup()
+            ) as docker_mgr, pytest.raises(Exception, match="No containers found"):
+                docker_mgr.create_postgres_backup()
 
     def test_docker_manager_constructor_parameters(self):
         """Test that DockerManager constructor stores parameters correctly."""
         service_config = ServiceConfig(name="test")
 
-        with patch("postgres_upgrader.docker.docker.from_env"):
-            with DockerManager(
-                "test_project", service_config, "postgres", "myuser", "mydb"
-            ) as docker_mgr:
-                assert docker_mgr.service_config == service_config
-                assert docker_mgr.container_user == "postgres"
-                assert docker_mgr.database_user == "myuser"
-                assert docker_mgr.database_name == "mydb"
+        with patch("postgres_upgrader.docker.docker.from_env"), DockerManager(
+            "test_project", service_config, "postgres", "myuser", "mydb"
+        ) as docker_mgr:
+            assert docker_mgr.service_config == service_config
+            assert docker_mgr.container_user == "postgres"
+            assert docker_mgr.database_user == "myuser"
+            assert docker_mgr.database_name == "mydb"
 
     def test_docker_manager_requires_all_parameters(self):
         """Test that DockerManager constructor requires all parameters."""
@@ -173,15 +173,14 @@ class TestDockerManagerErrorHandling:
 
             with pytest.raises(
                 docker.errors.DockerException, match="Docker daemon not running"
+            ), DockerManager(
+                "test_project",
+                self.service_config,
+                "postgres",
+                "testuser",
+                "testdb",
             ):
-                with DockerManager(
-                    "test_project",
-                    self.service_config,
-                    "postgres",
-                    "testuser",
-                    "testdb",
-                ):
-                    pass
+                pass
 
     def test_no_containers_found(self):
         """Test behavior when no matching containers are found."""
@@ -192,9 +191,8 @@ class TestDockerManagerErrorHandling:
 
             with DockerManager(
                 "test_project", self.service_config, "postgres", "testuser", "testdb"
-            ) as docker_mgr:
-                with pytest.raises(Exception, match="No containers found"):
-                    docker_mgr.create_postgres_backup()
+            ) as docker_mgr, pytest.raises(Exception, match="No containers found"):
+                docker_mgr.create_postgres_backup()
 
     def test_container_exec_failure(self):
         """Test handling of container command execution failures."""
@@ -211,11 +209,10 @@ class TestDockerManagerErrorHandling:
 
             with DockerManager(
                 "test_project", self.service_config, "postgres", "testuser", "testdb"
-            ) as docker_mgr:
-                with pytest.raises(
-                    Exception, match="pg_dump failed with exit code 1.*pg_dump: error"
-                ):
-                    docker_mgr.create_postgres_backup()
+            ) as docker_mgr, pytest.raises(
+                Exception, match="pg_dump failed with exit code 1.*pg_dump: error"
+            ):
+                docker_mgr.create_postgres_backup()
 
     def test_container_not_running(self):
         """Test handling when container exists but is not running."""
@@ -234,11 +231,10 @@ class TestDockerManagerErrorHandling:
 
             with DockerManager(
                 "test_project", self.service_config, "postgres", "testuser", "testdb"
-            ) as docker_mgr:
-                with pytest.raises(
-                    docker.errors.APIError, match="Container not running"
-                ):
-                    docker_mgr.create_postgres_backup()
+            ) as docker_mgr, pytest.raises(
+                docker.errors.APIError, match="Container not running"
+            ):
+                docker_mgr.create_postgres_backup()
 
     def test_missing_backup_volume(self):
         """Test handling when backup volume is not selected."""
@@ -311,12 +307,11 @@ class TestDockerManagerErrorHandling:
 
             with DockerManager(
                 "test_project", self.service_config, "postgres", "testuser", "testdb"
-            ) as docker_mgr:
-                with pytest.raises(
-                    Exception,
-                    match="pg_dump failed with exit code 1.*connection to database failed",
-                ):
-                    docker_mgr.create_postgres_backup()
+            ) as docker_mgr, pytest.raises(
+                Exception,
+                match="pg_dump failed with exit code 1.*connection to database failed",
+            ):
+                docker_mgr.create_postgres_backup()
 
     def test_permission_denied_backup_directory(self):
         """Test handling of backup directory permission issues."""
@@ -335,12 +330,11 @@ class TestDockerManagerErrorHandling:
 
             with DockerManager(
                 "test_project", self.service_config, "postgres", "testuser", "testdb"
-            ) as docker_mgr:
-                with pytest.raises(
-                    Exception,
-                    match="pg_dump failed with exit code 1.*Permission denied",
-                ):
-                    docker_mgr.create_postgres_backup()
+            ) as docker_mgr, pytest.raises(
+                Exception,
+                match="pg_dump failed with exit code 1.*Permission denied",
+            ):
+                docker_mgr.create_postgres_backup()
 
     def test_empty_service_name(self):
         """Test handling of empty or invalid service names."""
@@ -1035,13 +1029,12 @@ class TestDockerManagerVolumeVerification:
 
             with DockerManager(
                 "test_project", self.service_config, "postgres", "testuser", "testdb"
-            ) as docker_mgr:
-                with pytest.raises(
-                    Exception, match="Backup volume failed to mount properly"
-                ):
-                    docker_mgr.verify_backup_volume_mounted(
-                        mock_container, sleep=0.1, timeout=0.5
-                    )
+            ) as docker_mgr, pytest.raises(
+                Exception, match="Backup volume failed to mount properly"
+            ):
+                docker_mgr.verify_backup_volume_mounted(
+                    mock_container, sleep=0.1, timeout=0.5
+                )
 
     def test_verify_backup_volume_mounted_no_service_config(self):
         """Test failure when service is not configured for PostgreSQL upgrade."""
@@ -1059,12 +1052,11 @@ class TestDockerManagerVolumeVerification:
                 "postgres",
                 "testuser",
                 "testdb",
-            ) as docker_mgr:
-                with pytest.raises(
-                    Exception,
-                    match="Service must have selected volumes for PostgreSQL upgrade",
-                ):
-                    docker_mgr.verify_backup_volume_mounted(mock_container)
+            ) as docker_mgr, pytest.raises(
+                Exception,
+                match="Service must have selected volumes for PostgreSQL upgrade",
+            ):
+                docker_mgr.verify_backup_volume_mounted(mock_container)
 
     def test_verify_backup_volume_mounted_no_backup_directory(self):
         """Test failure when backup directory is not found in configuration."""
@@ -1104,11 +1096,10 @@ class TestDockerManagerVolumeVerification:
                 "postgres",
                 "testuser",
                 "testdb",
-            ) as docker_mgr:
-                with pytest.raises(
-                    Exception, match="Backup directory not found in configuration"
-                ):
-                    docker_mgr.verify_backup_volume_mounted(mock_container)
+            ) as docker_mgr, pytest.raises(
+                Exception, match="Backup directory not found in configuration"
+            ):
+                docker_mgr.verify_backup_volume_mounted(mock_container)
 
     @patch("postgres_upgrader.docker.subprocess.run")
     def test_verify_backup_volume_mounted_retry_logic(self, mock_subprocess):

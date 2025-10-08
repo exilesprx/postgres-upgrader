@@ -7,8 +7,10 @@ with automatic backup and verification.
 """
 
 import argparse
-from rich.console import Console
 import sys
+
+from rich.console import Console
+
 from postgres_upgrader.postgres import Postgres
 
 

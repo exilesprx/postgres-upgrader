@@ -1,10 +1,10 @@
-import docker
-import time
 import subprocess
+import time
 from datetime import datetime
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
+
+import docker
 from docker.models.containers import Container
-from docker.models.volumes import Volume
 
 if TYPE_CHECKING:
     from .compose_inspector import ServiceConfig, VolumeMount
@@ -31,13 +31,13 @@ class DockerManager:
 
     def __init__(
         self,
-        project_name: Optional[str],
+        project_name: str | None,
         service_config: "ServiceConfig",
         container_user: str,
         database_user: str,
         database_name: str,
     ):
-        self.client: Optional[docker.DockerClient] = None
+        self.client: docker.DockerClient | None = None
         self.project_name = project_name
         self.service_config = service_config
         self.container_user = container_user
@@ -546,7 +546,7 @@ class DockerManager:
 
     def list_files_in_volume(
         self, container: Container, volume: "VolumeMount"
-    ) -> Optional[list]:
+    ) -> list | None:
         """
         List files in the specified Docker volume.
 

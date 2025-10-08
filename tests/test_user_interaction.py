@@ -3,15 +3,17 @@ Tests for user interaction and prompt functionality.
 Comprehensive testing of user input handling, inquirer integration, and interactive workflows.
 """
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import patch, MagicMock
+
 from postgres_upgrader import (
-    prompt_user_choice,
-    identify_service_volumes,
-    prompt_container_user,
     DockerComposeConfig,
     ServiceConfig,
     VolumeMount,
+    identify_service_volumes,
+    prompt_container_user,
+    prompt_user_choice,
 )
 
 
