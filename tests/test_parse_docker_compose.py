@@ -12,19 +12,6 @@ from postgres_upgrader import (
 from postgres_upgrader.compose_inspector import VolumeMount
 
 
-class TestVolumeMount:
-    def test_volume_mount_parsing_other_type(self):
-        """Test that non-volume mount types raise an exception."""
-        volume_config = {
-            "type": "bind",
-            "source": "/host/path",
-            "target": "/container/path",
-        }
-
-        with pytest.raises(Exception, match="Non-volume mounts are not supported"):
-            VolumeMount.from_string(volume_config)
-
-
 # Mock docker compose config output
 MOCK_DOCKER_COMPOSE_CONFIG = """
 name: postgres-updater
@@ -64,6 +51,42 @@ volumes:
   database:
     name: postgres-updater_database
 """
+
+
+class TestVolumeMount:
+    """Test volume mount parsing functionality."""
+
+    def test_volume_mount_parsing_other_type(self):
+        """Test that non-volume mount types raise an exception."""
+        volume_config = {
+            "type": "bind",
+            "source": "/host/path",
+            "target": "/container/path",
+        }
+
+        with pytest.raises(Exception, match="Non-volume mounts are not supported"):
+            VolumeMount.from_string(volume_config)
+
+    def test_volume_mount_parsing_complete(self):
+        """Test parsing volume mount config dict with valid format."""
+        volume_config = {
+            "type": "volume",
+            "source": "database",
+            "target": "/var/lib/postgresql/data",
+            "volume": {},
+        }
+        volume_mappings = {"database": {"name": "postgres-updater_database"}}
+
+        result = VolumeMount.from_string(volume_config, volume_mappings)
+
+        expected = VolumeMount(
+            name="database",
+            path="/var/lib/postgresql/data",
+            raw="database:/var/lib/postgresql/data",
+            resolved_name="postgres-updater_database",
+        )
+
+        assert result == expected
 
 
 class TestGetVolumes:
@@ -181,42 +204,6 @@ class TestVolumeAccess:
         volumes = []
         missing_volume = next((v for v in volumes if v.name == "backups"), None)
         assert missing_volume is None
-
-
-class TestVolumeMount:
-    """Test volume mount parsing functionality."""
-
-    def test_volume_mount_parsing_complete(self):
-        """Test parsing volume mount config dict with valid format."""
-        volume_config = {
-            "type": "volume",
-            "source": "database",
-            "target": "/var/lib/postgresql/data",
-            "volume": {},
-        }
-        volume_mappings = {"database": {"name": "postgres-updater_database"}}
-
-        result = VolumeMount.from_string(volume_config, volume_mappings)
-
-        expected = VolumeMount(
-            name="database",
-            path="/var/lib/postgresql/data",
-            raw="database:/var/lib/postgresql/data",
-            resolved_name="postgres-updater_database",
-        )
-
-        assert result == expected
-
-    def test_volume_mount_parsing_other_type(self):
-        """Test that non-volume mount types raise an exception."""
-        volume_config = {
-            "type": "bind",
-            "source": "/host/path",
-            "target": "/container/path",
-        }
-
-        with pytest.raises(Exception, match="Non-volume mounts are not supported"):
-            VolumeMount.from_string(volume_config)
 
 
 class TestVolumeValidation:
