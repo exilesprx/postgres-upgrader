@@ -464,6 +464,41 @@ class TestDockerManagerErrorHandling:
             ):
                 docker_mgr.create_postgres_backup()
 
+    def test_multiple_containers_same_service_includes_container_names(self):
+        """Test that multiple containers exception includes container names in the message."""
+        with patch("postgres_upgrader.docker.docker.from_env") as mock_docker:
+            mock_client = MagicMock()
+            mock_docker.return_value = mock_client
+
+            # Mock multiple containers with specific names
+            mock_container1 = MagicMock()
+            mock_container1.name = "postgres_container_1"
+            mock_container2 = MagicMock()
+            mock_container2.name = "postgres_container_2"
+            mock_container3 = MagicMock()
+            mock_container3.name = "postgres_container_3"
+
+            mock_client.containers.list.return_value = [
+                mock_container1,
+                mock_container2,
+                mock_container3,
+            ]
+
+            with (
+                DockerManager(
+                    "test_project",
+                    self.service_config,
+                    "postgres",
+                    "testuser",
+                    "testdb",
+                ) as docker_mgr,
+                pytest.raises(
+                    Exception,
+                    match=r"Multiple containers found for service postgres: \['postgres_container_1', 'postgres_container_2', 'postgres_container_3'\]",
+                ),
+            ):
+                docker_mgr.find_container_by_service()
+
 
 class TestDockerManagerIntegration:
     """Mock-based integration tests for DockerManager workflows."""

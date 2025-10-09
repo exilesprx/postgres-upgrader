@@ -439,7 +439,10 @@ class DockerManager:
         if len(containers) == 0:
             raise Exception(f"No containers found for service {service_name}")
         if len(containers) > 1:
-            raise Exception(f"Multiple containers found for service {service_name}")
+            container_names = [c.name for c in containers]
+            raise Exception(
+                f"Multiple containers found for service {service_name}: {container_names}"
+            )
 
         return containers[0]  # type: ignore[no-any-return]
 
