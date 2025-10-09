@@ -28,7 +28,9 @@ class VolumeMount:
 
     @classmethod
     def from_string(
-        cls, volume_config: dict, volume_mappings: dict[str, dict] | None = None
+        cls,
+        volume_config: dict[str, str],
+        volume_mappings: dict[str, dict[str, str]] | None = None,
     ) -> "VolumeMount":
         """
         Parse a Docker Compose config dict into a VolumeMount object.

@@ -1,6 +1,7 @@
 import subprocess
 import time
 from datetime import datetime
+from types import TracebackType
 from typing import TYPE_CHECKING, Union
 
 import docker
@@ -54,7 +55,12 @@ class DockerManager:
         self.client = docker.from_env()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         """
         Exit the context manager and clean up Docker client connection.
 
@@ -64,7 +70,7 @@ class DockerManager:
             exc_tb: Exception traceback (if any)
         """
         if self.client:
-            self.client.close()
+            self.client.close()  # type: ignore[no-untyped-call]
 
     def create_postgres_backup(self) -> str:
         """
@@ -116,7 +122,7 @@ class DockerManager:
 
         return backup_path
 
-    def stop_service_container(self):
+    def stop_service_container(self) -> None:
         """
         Stop the configured service container using Docker Compose.
 
@@ -132,7 +138,7 @@ class DockerManager:
         except subprocess.CalledProcessError as e:
             raise Exception(f"Failed to stop service {service_name}: {e}") from e
 
-    def remove_service_container(self):
+    def remove_service_container(self) -> None:
         """
         Remove the configured service container using Docker Compose.
 
@@ -149,7 +155,7 @@ class DockerManager:
         except subprocess.CalledProcessError as e:
             raise Exception(f"Failed to remove service {service_name}: {e}") from e
 
-    def update_service_container(self):
+    def update_service_container(self) -> None:
         """
         Pull the latest image for the configured service.
 
@@ -166,7 +172,7 @@ class DockerManager:
         except subprocess.CalledProcessError as e:
             raise Exception(f"Failed to update service {service_name}: {e}") from e
 
-    def build_service_container(self):
+    def build_service_container(self) -> None:
         """
         Build the configured service container using Docker Compose.
 
@@ -183,7 +189,7 @@ class DockerManager:
         except subprocess.CalledProcessError as e:
             raise Exception(f"Failed to build service {service_name}: {e}") from e
 
-    def remove_service_main_volume(self):
+    def remove_service_main_volume(self) -> None:
         """
         Remove the main data volume for the configured service.
 
@@ -240,7 +246,9 @@ class DockerManager:
 
         return container
 
-    def verify_backup_volume_mounted(self, container, sleep=3, timeout=30):
+    def verify_backup_volume_mounted(
+        self, container: Container, sleep: int = 3, timeout: int = 30
+    ) -> bool:
         """
         Verify that the backup volume is properly mounted and accessible.
 
@@ -290,7 +298,7 @@ class DockerManager:
                 container.reload()
                 is_healthy = self._check_backup_volume_health(container, backup_volume)
                 if is_healthy:
-                    return
+                    return True
 
             except Exception:
                 pass
@@ -320,7 +328,10 @@ class DockerManager:
                     "Backup volume failed to mount properly after container restart. This may be a Docker Compose volume mounting issue."
                 )
 
-    def import_data_from_backup(self, backup_path: str):
+        # Should never reach here as the loop either returns True or raises an exception
+        return False
+
+    def import_data_from_backup(self, backup_path: str) -> None:
         """
         Import PostgreSQL data from a backup file into the database.
 
@@ -357,7 +368,7 @@ class DockerManager:
                 f"Import failed with exit code {exit_code}: {output.decode('utf-8')}"
             )
 
-    def update_collation_version(self):
+    def update_collation_version(self) -> bool:
         """
         Update collation version for the PostgreSQL database after upgrade.
 
@@ -430,9 +441,11 @@ class DockerManager:
         if len(containers) > 1:
             raise Exception(f"Multiple containers found for service {service_name}")
 
-        return containers[0]
+        return containers[0]  # type: ignore[no-any-return]
 
-    def check_container_status(self, container, sleep=5, timeout=30) -> bool:
+    def check_container_status(
+        self, container: Container, sleep: int = 5, timeout: int = 30
+    ) -> bool:
         """
         Check if the service container is healthy after restart.
 
@@ -478,7 +491,7 @@ class DockerManager:
 
         return True
 
-    def verify_backup_integrity(self, backup_path: str) -> dict:
+    def verify_backup_integrity(self, backup_path: str) -> dict[str, int | str | bool]:
         """
         Verify backup file integrity and extract basic statistics.
 
@@ -546,7 +559,7 @@ class DockerManager:
 
     def list_files_in_volume(
         self, container: Container, volume: "VolumeMount"
-    ) -> list | None:
+    ) -> list[str] | None:
         """
         List files in the specified Docker volume.
 
@@ -570,11 +583,13 @@ class DockerManager:
             if exit_code != 0:
                 raise Exception(f"Volume {volume.name} is not mounted in container")
 
-            return output.decode("utf-8").strip().split("\n")
+            return output.decode("utf-8").strip().split("\n")  # type: ignore[no-any-return]
         except subprocess.CalledProcessError:
             return None
 
-    def get_database_statistics(self, container: Container) -> dict:
+    def get_database_statistics(
+        self, container: Container
+    ) -> dict[str, int | str | bool]:
         """
         Get current database statistics for verification purposes.
 
@@ -668,7 +683,7 @@ class DockerManager:
 
     def _force_volume_reconnect(
         self, container: Container, backup_volume: Union["VolumeMount", None]
-    ):
+    ) -> None:
         """
         Force volume reconnection without full container restart.
 
@@ -709,7 +724,7 @@ class DockerManager:
             raise Exception(f"Volume reconnection failed: {e}") from e
 
     def _check_backup_volume_health(
-        self, container, backup_volume: Union["VolumeMount", None]
+        self, container: Container, backup_volume: Union["VolumeMount", None]
     ) -> bool:
         """
         Check if the backup volume is properly mounted and accessible.

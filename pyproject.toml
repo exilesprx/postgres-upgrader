@@ -128,6 +128,7 @@ dev = [
     "mypy>=1.8.0",
     "types-pyyaml>=6.0.12",
     "pre-commit>=3.6.0",
+    "types-docker>=7.1.0.20251009",
 ]
 
 [tool.mypy]
@@ -144,3 +145,5 @@ no_implicit_optional = true
 warn_redundant_casts = true
 warn_unused_ignores = true
 warn_no_return = true
+# Keep ignore_missing_imports for third-party libraries without stubs
+ignore_missing_imports = true

@@ -5,9 +5,13 @@ This module contains the core business logic for PostgreSQL upgrades
 using Docker Compose, separated from CLI concerns.
 """
 
+from argparse import Namespace
 from typing import TYPE_CHECKING
 
 from docker.models.containers import Container
+
+if TYPE_CHECKING:
+    from .docker import DockerManager
 from rich.console import Console
 
 from . import (
@@ -39,7 +43,7 @@ class Postgres:
         """
         self.console = console
 
-    def handle_export_command(self, _args) -> None:
+    def handle_export_command(self, _args: Namespace) -> None:
         """
         Handle the export command to create a PostgreSQL backup.
 
@@ -65,7 +69,7 @@ class Postgres:
         ) as docker_mgr:
             _, _, _ = self._create_backup_workflow(docker_mgr)
 
-    def handle_import_command(self, _args) -> None:
+    def handle_import_command(self, _args: Namespace) -> None:
         """
         Handle the import command to restore data from a PostgreSQL backup.
 
@@ -112,7 +116,7 @@ class Postgres:
 
             self._import_workflow_with_container(docker_mgr, container, file, database)
 
-    def handle_upgrade_command(self, _args) -> None:
+    def handle_upgrade_command(self, _args: Namespace) -> None:
         """
         Execute the complete PostgreSQL upgrade workflow.
 
@@ -173,7 +177,9 @@ class Postgres:
                 "  PostgreSQL upgrade completed successfully!", style="bold green"
             )
 
-    def _create_backup_workflow(self, docker_mgr) -> tuple[dict, str, dict]:
+    def _create_backup_workflow(
+        self, docker_mgr: "DockerManager"
+    ) -> tuple[dict[str, int | str | bool], str, dict[str, int | str | bool]]:
         """
         Execute the backup creation workflow including statistics collection and verification.
 
@@ -206,7 +212,7 @@ class Postgres:
         return original_stats, backup_path, backup_stats
 
     def _import_workflow(
-        self, docker_mgr, backup_path: str, database: str
+        self, docker_mgr: "DockerManager", backup_path: str, database: str
     ) -> Container:
         """
         Execute the import workflow including container startup, volume verification, and data import.
@@ -231,7 +237,11 @@ class Postgres:
         return container
 
     def _import_workflow_with_container(
-        self, docker_mgr, container, backup_path: str, database: str
+        self,
+        docker_mgr: "DockerManager",
+        container: Container,
+        backup_path: str,
+        database: str,
     ) -> None:
         """
         Execute the import workflow with an existing container.
@@ -331,7 +341,7 @@ class Postgres:
         database = compose_config.get_postgres_db(service_name)
         return user, database
 
-    def _display_import_stats(self, current_stats: dict) -> None:
+    def _display_import_stats(self, current_stats: dict[str, int | str | bool]) -> None:
         """
         Display import statistics to the user in a formatted manner.
 
@@ -357,8 +367,11 @@ class Postgres:
         self.console.print(f"      Database size: {current_stats['database_size']}")
 
     def _verify_upgrade_success(
-        self, original_stats: dict, current_stats: dict, backup_stats: dict
-    ) -> dict:
+        self,
+        original_stats: dict[str, int | str | bool],
+        current_stats: dict[str, int | str | bool],
+        backup_stats: dict[str, int | str | bool],
+    ) -> dict[str, int | str | bool | dict[str, int | str | bool] | list[str]]:
         """
         Verify that PostgreSQL upgrade was successful by comparing statistics.
 
@@ -401,8 +414,8 @@ class Postgres:
             success = False
 
         # Compare table counts (should match or be close)
-        original_tables = original_stats.get("table_count", 0)
-        current_tables = current_stats["table_count"]
+        original_tables = int(original_stats.get("table_count", 0))
+        current_tables = int(current_stats["table_count"])
 
         if abs(original_tables - current_tables) > 1:  # Allow for small differences
             verification_warnings.append(
@@ -411,7 +424,7 @@ class Postgres:
             success = False
 
         # Use backup_stats to verify backup was substantial enough
-        backup_table_count = backup_stats.get("estimated_table_count", 0)
+        backup_table_count = int(backup_stats.get("estimated_table_count", 0))
         if original_tables > 0 and backup_table_count == 0:
             verification_warnings.append(
                 "Original database had tables but backup appears to contain no table definitions"
@@ -422,7 +435,7 @@ class Postgres:
         MIN_BACKUP_SIZE_BYTES = (
             1000  # Less than 1KB seems too small for a database with tables
         )
-        backup_size = backup_stats.get("file_size_bytes", 0)
+        backup_size = int(backup_stats.get("file_size_bytes", 0))
         if original_tables > 0 and backup_size < MIN_BACKUP_SIZE_BYTES:
             verification_warnings.append(
                 f"Backup file is suspiciously small ({backup_size} bytes) for a database with {original_tables} tables"
@@ -430,8 +443,8 @@ class Postgres:
             success = False
 
         if (
-            current_stats["estimated_total_rows"] == 0
-            and original_stats.get("estimated_total_rows", 0) > 0
+            int(current_stats["estimated_total_rows"]) == 0
+            and int(original_stats.get("estimated_total_rows", 0)) > 0
         ):
             verification_warnings.append(
                 "No rows found in restored database, but original had data"
@@ -450,7 +463,10 @@ class Postgres:
             "database_size": current_stats["database_size"],
         }
 
-    def _display_upgrade_results(self, data: dict):
+    def _display_upgrade_results(
+        self,
+        data: dict[str, int | str | bool | dict[str, int | str | bool] | list[str]],
+    ) -> None:
         """
         Display upgrade verification results to the user in a formatted manner.
 
@@ -476,8 +492,10 @@ class Postgres:
             in red styling.
         """
         if not data["success"]:
-            for warning in data["warnings"]:
-                self.console.print(f"     WARNING: {warning}", style="red")
+            warnings = data["warnings"]
+            if isinstance(warnings, list):
+                for warning in warnings:
+                    self.console.print(f"     WARNING: {warning}", style="red")
 
             self.console.print(
                 "Upgrade verification failed - data may not have been restored correctly",
