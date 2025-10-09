@@ -110,7 +110,7 @@ class TestPromptUserChoice:
 
     def test_prompt_user_choice_unicode_characters(self):
         """Test prompt_user_choice handles Unicode characters."""
-        choices = ["Опция А", "选项 B", "Opção C", "🚀 Rocket"]
+        choices = ["Опция A", "选项 B", "Opção C", "🚀 Rocket"]
 
         with patch("postgres_upgrader.prompt.inquirer") as mock_inquirer:
             mock_inquirer.List.return_value = "mock_question"

@@ -138,11 +138,13 @@ class TestDockerManager:
             mock_docker.side_effect = Exception("Docker connection failed")
 
             # Constructor should handle Docker connection properly
-            with pytest.raises(Exception, match="Docker connection failed"):
-                with DockerManager(
+            with (
+                pytest.raises(Exception, match="Docker connection failed"),
+                DockerManager(
                     "test_project", service_config, "postgres", "testuser", "testdb"
-                ):
-                    pass  # Should fail on context manager entry
+                ),
+            ):
+                pass  # Should fail on context manager entry
 
 
 class TestDockerManagerErrorHandling:
@@ -232,7 +234,7 @@ class TestDockerManagerErrorHandling:
                     "testdb",
                 ) as docker_mgr,
                 pytest.raises(
-                    Exception, match="pg_dump failed with exit code 1.*pg_dump: error"
+                    Exception, match=r"pg_dump failed with exit code 1.*pg_dump: error"
                 ),
             ):
                 docker_mgr.create_postgres_backup()
@@ -284,15 +286,16 @@ class TestDockerManagerErrorHandling:
             mock_client = MagicMock()
             mock_docker.return_value = mock_client
 
-            with DockerManager(
-                "test_project", config_no_backup, "postgres", "testuser", "testdb"
-            ) as docker_mgr:
-                # Update expected error message to match actual implementation
-                with pytest.raises(
+            with (
+                DockerManager(
+                    "test_project", config_no_backup, "postgres", "testuser", "testdb"
+                ) as docker_mgr,
+                pytest.raises(
                     Exception,
                     match="Service must have selected volumes for PostgreSQL upgrade",
-                ):
-                    docker_mgr.create_postgres_backup()
+                ),
+            ):
+                docker_mgr.create_postgres_backup()
 
     def test_invalid_container_user(self):
         """Test handling of invalid container user."""
@@ -309,14 +312,20 @@ class TestDockerManagerErrorHandling:
             )
             mock_client.containers.list.return_value = [mock_container]
 
-            with DockerManager(
-                "test_project", self.service_config, "invaliduser", "testuser", "testdb"
-            ) as docker_mgr:
-                with pytest.raises(
+            with (
+                DockerManager(
+                    "test_project",
+                    self.service_config,
+                    "invaliduser",
+                    "testuser",
+                    "testdb",
+                ) as docker_mgr,
+                pytest.raises(
                     Exception,
-                    match="pg_dump failed with exit code 1.*su: user invaliduser does not exist",
-                ):
-                    docker_mgr.create_postgres_backup()
+                    match=r"pg_dump failed with exit code 1.*su: user invaliduser does not exist",
+                ),
+            ):
+                docker_mgr.create_postgres_backup()
 
     def test_database_connection_failure(self):
         """Test handling of PostgreSQL database connection failures."""
@@ -343,7 +352,7 @@ class TestDockerManagerErrorHandling:
                 ) as docker_mgr,
                 pytest.raises(
                     Exception,
-                    match="pg_dump failed with exit code 1.*connection to database failed",
+                    match=r"pg_dump failed with exit code 1.*connection to database failed",
                 ),
             ):
                 docker_mgr.create_postgres_backup()
@@ -373,7 +382,7 @@ class TestDockerManagerErrorHandling:
                 ) as docker_mgr,
                 pytest.raises(
                     Exception,
-                    match="pg_dump failed with exit code 1.*Permission denied",
+                    match=r"pg_dump failed with exit code 1.*Permission denied",
                 ),
             ):
                 docker_mgr.create_postgres_backup()
@@ -387,15 +396,16 @@ class TestDockerManagerErrorHandling:
             mock_docker.return_value = mock_client
             mock_client.containers.list.return_value = []
 
-            with DockerManager(
-                "test_project", empty_config, "postgres", "testuser", "testdb"
-            ) as docker_mgr:
-                # Update expected error message to match actual implementation
-                with pytest.raises(
+            with (
+                DockerManager(
+                    "test_project", empty_config, "postgres", "testuser", "testdb"
+                ) as docker_mgr,
+                pytest.raises(
                     Exception,
                     match="Service must have selected volumes for PostgreSQL upgrade",
-                ):
-                    docker_mgr.create_postgres_backup()
+                ),
+            ):
+                docker_mgr.create_postgres_backup()
 
     def test_context_manager_cleanup_on_error(self):
         """Test that context manager properly cleans up on errors."""
@@ -411,7 +421,7 @@ class TestDockerManagerErrorHandling:
                     "postgres",
                     "testuser",
                     "testdb",
-                ) as docker_mgr:
+                ) as _docker_mgr:
                     # Simulate an error inside the context
                     raise ValueError("Test error")
             except ValueError:
@@ -440,14 +450,19 @@ class TestDockerManagerErrorHandling:
                 mock_container2,
             ]
 
-            with DockerManager(
-                "test_project", self.service_config, "postgres", "testuser", "testdb"
-            ) as docker_mgr:
-                # Should raise exception about multiple containers
-                with pytest.raises(
+            with (
+                DockerManager(
+                    "test_project",
+                    self.service_config,
+                    "postgres",
+                    "testuser",
+                    "testdb",
+                ) as docker_mgr,
+                pytest.raises(
                     Exception, match="Multiple containers found for service postgres"
-                ):
-                    docker_mgr.create_postgres_backup()
+                ),
+            ):
+                docker_mgr.create_postgres_backup()
 
 
 class TestDockerManagerIntegration:
@@ -480,7 +495,7 @@ class TestDockerManagerIntegration:
         with (
             patch("postgres_upgrader.docker.docker.from_env") as mock_docker,
             patch("postgres_upgrader.docker.subprocess.run") as mock_subprocess,
-            patch("time.sleep") as mock_sleep,  # Mock sleep to avoid delays
+            patch("time.sleep"),  # Mock sleep to avoid delays
         ):
             mock_client = MagicMock()
             mock_docker.return_value = mock_client
@@ -591,22 +606,25 @@ class TestDockerManagerIntegration:
                 (0, b"Extra response"),  # Buffer for additional calls
             ]
 
-            with DockerManager(
-                "test_project", self.service_config, "postgres", "testuser", "testdb"
-            ) as docker_mgr:
-                # Mock container health check for import
-                with patch.object(
-                    docker_mgr, "check_container_status", return_value=True
-                ):
-                    # Test backup creation
-                    backup_path = docker_mgr.create_postgres_backup()
-                    assert backup_path is not None
+            with (
+                DockerManager(
+                    "test_project",
+                    self.service_config,
+                    "postgres",
+                    "testuser",
+                    "testdb",
+                ) as docker_mgr,
+                patch.object(docker_mgr, "check_container_status", return_value=True),
+            ):
+                # Test backup creation
+                backup_path = docker_mgr.create_postgres_backup()
+                assert backup_path is not None
 
-                    # Test data import from the backup
-                    docker_mgr.import_data_from_backup(backup_path)
+                # Test data import from the backup
+                docker_mgr.import_data_from_backup(backup_path)
 
-                    # Verify both operations called container
-                    assert mock_container.exec_run.call_count >= 2
+                # Verify both operations called container
+                assert mock_container.exec_run.call_count >= 2
 
     def test_service_discovery_workflow(self):
         """Test service discovery and container finding logic."""
@@ -718,13 +736,14 @@ class TestDockerManagerIntegration:
                 backup_path = docker_mgr.create_postgres_backup()
                 assert backup_path is not None
 
-                # Mock container health check failure
-                with patch.object(
-                    docker_mgr, "check_container_status", return_value=False
+                # Import should fail with health check error
+                with (
+                    patch.object(
+                        docker_mgr, "check_container_status", return_value=False
+                    ),
+                    pytest.raises(Exception, match="Container is not healthy"),
                 ):
-                    # Import should fail with health check error
-                    with pytest.raises(Exception, match="Container is not healthy"):
-                        docker_mgr.import_data_from_backup(backup_path)
+                    docker_mgr.import_data_from_backup(backup_path)
 
     def test_multiple_method_calls_same_instance(self):
         """Test multiple operations on same DockerManager instance."""
@@ -1163,7 +1182,7 @@ class TestDockerManagerVolumeVerification:
             patch("postgres_upgrader.docker.docker.from_env") as mock_docker,
             patch("postgres_upgrader.docker.time.sleep") as mock_sleep,
         ):
-            mock_client = MagicMock()
+            _mock_client = MagicMock()
             mock_docker.return_value = mock_docker
 
             # Mock container that always fails
@@ -1220,10 +1239,13 @@ class TestDockerManagerServiceLifecycle:
         self.service_config.selected_main_volume = self.service_config.volumes[0]
         self.service_config.selected_backup_volume = self.service_config.volumes[1]
 
+    @patch("postgres_upgrader.docker.docker.from_env")
     @patch("postgres_upgrader.docker.subprocess.run")
-    def test_stop_service_container(self, mock_subprocess):
+    def test_stop_service_container(self, mock_subprocess, mock_docker):
         """Test stopping service container."""
         mock_subprocess.return_value = MagicMock(returncode=0)
+        mock_client = MagicMock()
+        mock_docker.return_value = mock_client
 
         with DockerManager(
             "test_project", self.service_config, "postgres", "testuser", "testdb"
@@ -1237,10 +1259,13 @@ class TestDockerManagerServiceLifecycle:
             assert "stop" in call_args
             assert "postgres" in call_args
 
+    @patch("postgres_upgrader.docker.docker.from_env")
     @patch("postgres_upgrader.docker.subprocess.run")
-    def test_remove_service_container(self, mock_subprocess):
+    def test_remove_service_container(self, mock_subprocess, mock_docker):
         """Test removing service container."""
         mock_subprocess.return_value = MagicMock(returncode=0)
+        mock_client = MagicMock()
+        mock_docker.return_value = mock_client
 
         with DockerManager(
             "test_project", self.service_config, "postgres", "testuser", "testdb"
@@ -1254,10 +1279,13 @@ class TestDockerManagerServiceLifecycle:
             assert "rm" in call_args
             assert "postgres" in call_args
 
+    @patch("postgres_upgrader.docker.docker.from_env")
     @patch("postgres_upgrader.docker.subprocess.run")
-    def test_update_service_container(self, mock_subprocess):
+    def test_update_service_container(self, mock_subprocess, mock_docker):
         """Test updating service container."""
         mock_subprocess.return_value = MagicMock(returncode=0)
+        mock_client = MagicMock()
+        mock_docker.return_value = mock_client
 
         with DockerManager(
             "test_project", self.service_config, "postgres", "testuser", "testdb"
@@ -1271,10 +1299,13 @@ class TestDockerManagerServiceLifecycle:
             assert "pull" in call_args
             assert "postgres" in call_args
 
+    @patch("postgres_upgrader.docker.docker.from_env")
     @patch("postgres_upgrader.docker.subprocess.run")
-    def test_build_service_container(self, mock_subprocess):
+    def test_build_service_container(self, mock_subprocess, mock_docker):
         """Test building service container."""
         mock_subprocess.return_value = MagicMock(returncode=0)
+        mock_client = MagicMock()
+        mock_docker.return_value = mock_client
 
         with DockerManager(
             "test_project", self.service_config, "postgres", "testuser", "testdb"
@@ -1288,10 +1319,13 @@ class TestDockerManagerServiceLifecycle:
             assert "build" in call_args
             assert "postgres" in call_args
 
+    @patch("postgres_upgrader.docker.docker.from_env")
     @patch("postgres_upgrader.docker.subprocess.run")
-    def test_remove_service_main_volume(self, mock_subprocess):
+    def test_remove_service_main_volume(self, mock_subprocess, mock_docker):
         """Test removing service main volume."""
         mock_subprocess.return_value = MagicMock(returncode=0)
+        mock_client = MagicMock()
+        mock_docker.return_value = mock_client
 
         with DockerManager(
             "test_project", self.service_config, "postgres", "testuser", "testdb"
@@ -1305,10 +1339,13 @@ class TestDockerManagerServiceLifecycle:
             assert "rm" in call_args
             assert "test_data" in call_args  # resolved name of main volume
 
+    @patch("postgres_upgrader.docker.docker.from_env")
     @patch("postgres_upgrader.docker.subprocess.run")
-    def test_service_lifecycle_error_handling(self, mock_subprocess):
+    def test_service_lifecycle_error_handling(self, mock_subprocess, mock_docker):
         """Test service lifecycle methods handle subprocess errors."""
         # Simulate subprocess.CalledProcessError
+        mock_client = MagicMock()
+        mock_docker.return_value = mock_client
         mock_subprocess.side_effect = subprocess.CalledProcessError(
             1, ["docker", "compose"]
         )

@@ -62,13 +62,10 @@ def identify_service_volumes(
 
     # Get volumes for chosen service using the data class method
     service = data.get_service(service_name)
-    if not service:
+    if not service or not service.volumes:
         return None
 
     volumes = service.volumes
-    if not volumes:
-        return None
-
     # Convert VolumeMount objects to strings for user selection
     volume_choices = [vol.raw for vol in volumes]
 

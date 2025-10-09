@@ -232,9 +232,11 @@ class TestHandleUpgradeCommand:
         mock_identify.return_value = mock_service
 
         # Mock _get_credentials to return None values
-        with patch.object(self.postgres, "_get_credentials", return_value=(None, None)):
-            with pytest.raises(Exception) as exc_info:
-                self.postgres.handle_upgrade_command(Mock())
+        with (
+            patch.object(self.postgres, "_get_credentials", return_value=(None, None)),
+            pytest.raises(Exception) as exc_info,
+        ):
+            self.postgres.handle_upgrade_command(Mock())
 
         assert (
             "Could not find PostgreSQL credentials in Docker Compose configuration"
