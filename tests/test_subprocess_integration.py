@@ -284,9 +284,8 @@ volumes:
             mock_result.stdout = mock_compose_output
             mock_run.return_value = mock_result
 
-            # Should raise exception when encountering bind mount
-            with pytest.raises(Exception, match="Non-volume mounts are not supported"):
-                parse_docker_compose()
+            config = parse_docker_compose()
+            assert len(config.get_volumes("postgres")) == 1
 
     def test_parse_compose_external_volumes(self):
         """Test parsing of external volumes."""

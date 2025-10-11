@@ -65,8 +65,8 @@ class TestVolumeMount:
             "target": "/container/path",
         }
 
-        with pytest.raises(Exception, match="Non-volume mounts are not supported"):
-            VolumeMount.from_string(volume_config)
+        volume = VolumeMount.from_string(volume_config)
+        assert volume is None
 
     def test_volume_mount_parsing_complete(self):
         """Test parsing volume mount config dict with valid format."""

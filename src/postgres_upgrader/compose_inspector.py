@@ -31,7 +31,7 @@ class VolumeMount:
         cls,
         volume_config: dict[str, str],
         volume_mappings: dict[str, dict[str, str]] | None = None,
-    ) -> "VolumeMount":
+    ) -> "VolumeMount | None":
         """
         Parse a Docker Compose config dict into a VolumeMount object.
 
@@ -46,10 +46,10 @@ class VolumeMount:
 
         Returns:
             VolumeMount: Validated volume mount object
+            None: When volume type is not 'volume' (e.g., bind mounts)
 
         Raises:
             ValueError: If volume config is invalid or volume name cannot be resolved
-            Exception: If non-volume mount types are attempted (bind mounts, etc.)
         """
 
         if volume_config.get("type") == "volume":
@@ -71,8 +71,8 @@ class VolumeMount:
             return cls(
                 name=source, path=target_path, raw=raw, resolved_name=resolved_name
             )
-        else:
-            raise Exception("Non-volume mounts are not supported.")
+
+        return None
 
 
 @dataclass
@@ -227,7 +227,8 @@ def parse_docker_compose() -> DockerComposeConfig:
                 volume_mount = VolumeMount.from_string(
                     volume_config, volume_mappings=volume_mappings
                 )
-                volume_mounts.append(volume_mount)
+                if volume_mount:
+                    volume_mounts.append(volume_mount)
 
         services[service_name] = ServiceConfig(
             name=service_name,
