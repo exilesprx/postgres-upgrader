@@ -1,6 +1,6 @@
 [project]
 name = "postgres-upgrader"
-version = "0.2.0"
+version = "0.2.1"
 description = "A specialized tool for managing PostgreSQL upgrades in Docker Compose environments"
 readme = "README.md"
 license = {text = "MIT"}
