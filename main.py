@@ -11,10 +11,30 @@ import sys
 
 from rich.console import Console
 
+from postgres_upgrader.cli import CommandDefinition, CommandRegistry
 from postgres_upgrader.postgres import Postgres
 
 
-def create_parser() -> argparse.ArgumentParser:
+def get_command_definitions(postgres: Postgres) -> list[CommandDefinition]:
+    """Get the list of all available command definitions."""
+    return [
+        CommandDefinition(
+            "upgrade",
+            "Run complete PostgreSQL upgrade workflow",
+            postgres.handle_upgrade_command,
+        ),
+        CommandDefinition(
+            "export", "Create PostgreSQL backup only", postgres.handle_export_command
+        ),
+        CommandDefinition(
+            "import",
+            "Import PostgreSQL data from backup",
+            postgres.handle_import_command,
+        ),
+    ]
+
+
+def create_parser(commands: list[CommandDefinition]) -> argparse.ArgumentParser:
     """Create and configure the argument parser."""
     parser = argparse.ArgumentParser(
         prog="postgres-upgrader",
@@ -30,15 +50,20 @@ Examples:
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    _ = subparsers.add_parser(
-        "upgrade", help="Run complete PostgreSQL upgrade workflow"
-    )
-
-    _ = subparsers.add_parser("export", help="Create PostgreSQL backup only")
-
-    _ = subparsers.add_parser("import", help="Import PostgreSQL data from backup")
+    for command_def in commands:
+        _ = subparsers.add_parser(command_def.name, help=command_def.help_text)
 
     return parser
+
+
+def create_command_registry(commands: list[CommandDefinition]) -> CommandRegistry:
+    """Create and populate the command registry with handlers."""
+    registry = CommandRegistry()
+
+    for command_def in commands:
+        registry.register(command_def.name, command_def.handler)
+
+    return registry
 
 
 def main() -> None:
@@ -47,27 +72,24 @@ def main() -> None:
 
     Handles argument parsing, command routing, and top-level exception handling.
     """
-    parser = create_parser()
+    console = Console()
+    postgres = Postgres(console)
+    commands = get_command_definitions(postgres)
+    parser = create_parser(commands)
+    registry = create_command_registry(commands)
     args = parser.parse_args()
 
     if not args.command:
         parser.print_help()
         sys.exit(1)
 
-    console = Console()
-    postgres = Postgres(console)
     try:
-        if args.command == "upgrade":
-            postgres.handle_upgrade_command(args)
-        elif args.command == "export":
-            postgres.handle_export_command(args)
-        elif args.command == "import":
-            postgres.handle_import_command(args)
-        else:
-            console.print(f"❌ Unknown command: {args.command}", style="bold red")
-            parser.print_help()
-            sys.exit(1)
-
+        handler = registry.get_handler(args.command)
+        handler(args)
+    except ValueError as e:
+        console.print(f"❌ {e}", style="bold red")
+        parser.print_help()
+        sys.exit(1)
     except KeyboardInterrupt:
         console.print("\n❌ Operation cancelled by user", style="bold red")
         sys.exit(1)

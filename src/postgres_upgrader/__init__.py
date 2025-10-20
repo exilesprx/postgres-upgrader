@@ -16,6 +16,7 @@ Main components:
 - postgres: Business logic orchestration for upgrade workflows
 """
 
+from .cli import CommandDefinition, CommandRegistry
 from .compose_inspector import (
     DockerComposeConfig,
     ServiceConfig,
@@ -26,6 +27,8 @@ from .docker import DockerManager
 from .prompt import identify_service_volumes, prompt_container_user, prompt_user_choice
 
 __all__ = [
+    "CommandDefinition",
+    "CommandRegistry",
     "DockerComposeConfig",
     "DockerManager",
     "ServiceConfig",
