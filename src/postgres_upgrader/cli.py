@@ -37,10 +37,7 @@ class CommandRegistry:
     def get_handler(self, command: str) -> CommandHandler:
         """Get a handler for the given command."""
         if command not in self._handlers:
-            available = ", ".join(sorted(self._handlers.keys()))
-            raise ValueError(
-                f"Unknown command '{command}'. Available commands: {available}"
-            )
+            raise ValueError(f"Unknown command {command}")
         return self._handlers[command]
 
     def get_available_commands(self) -> list[str]:

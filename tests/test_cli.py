@@ -61,7 +61,7 @@ class TestCommandRegistry:
             registry.register("test", handler2)
 
     def test_get_handler_for_nonexistent_command_raises_error(self):
-        """Test that getting handler for unknown command raises ValueError with available commands."""
+        """Test that getting handler for unknown command raises ValueError with command info."""
         registry = CommandRegistry()
         handler1 = Mock()
         handler2 = Mock()
@@ -69,19 +69,14 @@ class TestCommandRegistry:
         registry.register("upgrade", handler1)
         registry.register("export", handler2)
 
-        with pytest.raises(
-            ValueError,
-            match=r"Unknown command 'invalid'\. Available commands: export, upgrade",
-        ):
+        with pytest.raises(ValueError, match=r"Unknown command invalid"):
             registry.get_handler("invalid")
 
     def test_get_handler_empty_registry_raises_error(self):
-        """Test that getting handler from empty registry shows no available commands."""
+        """Test that getting handler from empty registry raises appropriate error."""
         registry = CommandRegistry()
 
-        with pytest.raises(
-            ValueError, match=r"Unknown command 'test'\. Available commands: "
-        ):
+        with pytest.raises(ValueError, match=r"Unknown command test"):
             registry.get_handler("test")
 
     def test_is_registered_returns_false_for_unregistered_command(self):

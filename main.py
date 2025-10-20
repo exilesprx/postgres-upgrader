@@ -86,8 +86,11 @@ def main() -> None:
     try:
         handler = registry.get_handler(args.command)
         handler(args)
-    except ValueError as e:
-        console.print(f"❌ {e}", style="bold red")
+    except ValueError:
+        console.print(f"❌ Unknown command '{args.command}'", style="bold red")
+        available_commands = registry.get_available_commands()
+        if available_commands:
+            console.print(f"Available commands: {', '.join(available_commands)}")
         parser.print_help()
         sys.exit(1)
     except KeyboardInterrupt:
