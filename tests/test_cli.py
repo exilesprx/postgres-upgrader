@@ -7,7 +7,12 @@ from unittest.mock import Mock
 
 import pytest
 
-from postgres_upgrader.cli import CommandDefinition, CommandRegistry
+from postgres_upgrader.cli import (
+    CommandDefinition,
+    CommandRegistry,
+    create_command_registry,
+    create_parser,
+)
 
 
 class TestCommandRegistry:
@@ -218,3 +223,58 @@ class TestCommandHandlerProtocol:
         retrieved_handler(args)
 
         assert handler.called_with is args
+
+
+class TestCreateParser:
+    """Test create_parser function."""
+
+    def test_create_parser_with_commands(self):
+        """Test that create_parser correctly creates parser with commands."""
+        handler1 = Mock()
+        handler2 = Mock()
+        commands = [
+            CommandDefinition("upgrade", "Upgrade PostgreSQL", handler1),
+            CommandDefinition("export", "Export data", handler2),
+        ]
+
+        parser = create_parser(commands)
+
+        # Test that parser has correct program name and description
+        assert parser.prog == "postgres-upgrader"
+        assert "PostgreSQL Docker Compose Upgrader" in parser.description
+
+    def test_create_parser_empty_commands(self):
+        """Test that create_parser works with empty command list."""
+        commands = []
+        parser = create_parser(commands)
+
+        # Should still create a valid parser
+        assert parser.prog == "postgres-upgrader"
+
+
+class TestCreateCommandRegistry:
+    """Test create_command_registry function."""
+
+    def test_create_command_registry_with_commands(self):
+        """Test that create_command_registry properly registers commands."""
+        handler1 = Mock()
+        handler2 = Mock()
+        commands = [
+            CommandDefinition("upgrade", "Upgrade PostgreSQL", handler1),
+            CommandDefinition("export", "Export data", handler2),
+        ]
+
+        registry = create_command_registry(commands)
+
+        assert registry.is_registered("upgrade")
+        assert registry.is_registered("export")
+        assert registry.get_handler("upgrade") is handler1
+        assert registry.get_handler("export") is handler2
+        assert registry.get_available_commands() == ["export", "upgrade"]
+
+    def test_create_command_registry_empty_commands(self):
+        """Test that create_command_registry works with empty command list."""
+        commands = []
+        registry = create_command_registry(commands)
+
+        assert registry.get_available_commands() == []

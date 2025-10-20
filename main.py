@@ -6,12 +6,15 @@ A tool for upgrading PostgreSQL versions in Docker Compose environments
 with automatic backup and verification.
 """
 
-import argparse
 import sys
 
 from rich.console import Console
 
-from postgres_upgrader.cli import CommandDefinition, CommandRegistry
+from postgres_upgrader.cli import (
+    CommandDefinition,
+    create_command_registry,
+    create_parser,
+)
 from postgres_upgrader.postgres import Postgres
 
 
@@ -32,38 +35,6 @@ def get_command_definitions(postgres: Postgres) -> list[CommandDefinition]:
             postgres.handle_import_command,
         ),
     ]
-
-
-def create_parser(commands: list[CommandDefinition]) -> argparse.ArgumentParser:
-    """Create and configure the argument parser."""
-    parser = argparse.ArgumentParser(
-        prog="postgres-upgrader",
-        description="PostgreSQL Docker Compose Upgrader - Manage PostgreSQL upgrades, backups, and imports",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  %(prog)s upgrade                    # Run full PostgreSQL upgrade workflow
-  %(prog)s export                     # Create backup only
-  %(prog)s import                     # Import from existing backup
-        """,
-    )
-
-    subparsers = parser.add_subparsers(dest="command", help="Available commands")
-
-    for command_def in commands:
-        _ = subparsers.add_parser(command_def.name, help=command_def.help_text)
-
-    return parser
-
-
-def create_command_registry(commands: list[CommandDefinition]) -> CommandRegistry:
-    """Create and populate the command registry with handlers."""
-    registry = CommandRegistry()
-
-    for command_def in commands:
-        registry.register(command_def.name, command_def.handler)
-
-    return registry
 
 
 def main() -> None:
