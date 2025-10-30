@@ -455,7 +455,7 @@ wheels = [
 
 [[package]]
 name = "postgres-upgrader"
-version = "0.3.1"
+version = "0.3.2"
 source = { editable = "." }
 dependencies = [
     { name = "docker" },
