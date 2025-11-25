@@ -70,7 +70,7 @@ class DockerManager:
             exc_tb: Exception traceback (if any)
         """
         if self.client:
-            self.client.close()  # type: ignore[no-untyped-call]
+            self.client.close()
 
     def create_postgres_backup(self) -> str:
         """
