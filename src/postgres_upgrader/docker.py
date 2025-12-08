@@ -444,7 +444,7 @@ class DockerManager:
                 f"Multiple containers found for service {service_name}: {container_names}"
             )
 
-        return containers[0]  # type: ignore[no-any-return]
+        return containers[0]
 
     def check_container_status(
         self, container: Container, sleep: int = 5, timeout: int = 30
