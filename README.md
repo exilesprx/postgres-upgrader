@@ -24,6 +24,16 @@ A specialized tool for managing PostgreSQL upgrades in Docker Compose environmen
 
 ## Installation
 
+### As a Tool (Recommended)
+
+Install directly from GitHub using uv:
+
+```bash
+uv tool install git+https://github.com/exilesprx/postgres-upgrader.git
+```
+
+This installs the `postgres-upgrader` and `pg-upgrader` commands globally, making them available from any directory.
+
 ### From Source
 
 #### With uv (recommended for development)
@@ -53,7 +63,10 @@ poetry install --with dev
 ### Verify Installation
 
 ```bash
-# Check if the tool works (console script)
+# If installed as a tool
+postgres-upgrader --help
+
+# If installed from source (console script)
 uv run postgres-upgrader --help
 
 # Or with main.py entry point
@@ -89,7 +102,10 @@ The tool provides three main commands for different workflow needs:
 # Navigate to your Docker Compose project directory
 cd /path/to/your/docker-compose-project
 
-# Run complete upgrade workflow (console script)
+# If installed as a tool
+postgres-upgrader upgrade
+
+# Or if running from source (console script)
 uv run postgres-upgrader upgrade
 
 # Or with main.py entry point
@@ -102,7 +118,10 @@ uv run python -m postgres_upgrader upgrade
 #### Export Database Backup Only
 
 ```bash
-# Create backup without performing upgrade (console script)
+# If installed as a tool
+postgres-upgrader export
+
+# Or if running from source (console script)
 uv run postgres-upgrader export
 
 # Or with main.py entry point
@@ -115,7 +134,10 @@ uv run python -m postgres_upgrader export
 #### Import from Existing Backup
 
 ```bash
-# Import data from existing backup (console script)
+# If installed as a tool
+postgres-upgrader import
+
+# Or if running from source (console script)
 uv run postgres-upgrader import
 
 # Or with main.py entry point
@@ -128,7 +150,10 @@ uv run python -m postgres_upgrader import
 #### Help and Available Commands
 
 ```bash
-# Show all available commands (console script)
+# If installed as a tool
+postgres-upgrader --help
+
+# Or if running from source (console script)
 uv run postgres-upgrader --help
 
 # Or with main.py entry point
