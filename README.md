@@ -13,6 +13,7 @@ A specialized tool for managing PostgreSQL upgrades in Docker Compose environmen
 - 🔧 **Volume Verification**: Two-tier backup volume mounting verification with lightweight Docker API reconnection and container restart fallback
 - 🛡️ **Enhanced Volume Validation**: Strict validation ensures only proper Docker volumes are used, rejecting bind mounts and requiring complete volume definitions for production safety
 - ⚡ **Flexible Commands**: Separate commands for export, import, and full upgrade workflows
+- 💾 **Automatic Backup Copy**: Backups are automatically copied to host filesystem by default (opt-out with `--no-copy`)
 - 🏗️ **Clean Architecture**: Separation of CLI concerns from business logic for better maintainability and testability
 - 🔄 **Automated Backup Creation**: With integrity verification before upgrades
 - 🐳 **Docker Image Management**: For new PostgreSQL versions (pull and build)
@@ -105,6 +106,9 @@ cd /path/to/your/docker-compose-project
 # If installed as a tool
 postgres-upgrader upgrade
 
+# Skip copying backup to host filesystem (backup remains in Docker volume)
+postgres-upgrader upgrade --no-copy
+
 # Or if running from source (console script)
 uv run postgres-upgrader upgrade
 
@@ -120,6 +124,9 @@ uv run python -m postgres_upgrader upgrade
 ```bash
 # If installed as a tool
 postgres-upgrader export
+
+# Skip copying backup to host filesystem (backup remains in Docker volume)
+postgres-upgrader export --no-copy
 
 # Or if running from source (console script)
 uv run postgres-upgrader export
@@ -173,7 +180,8 @@ Each command follows these patterns:
 2. Prompt for service and volume selection
 3. Collect baseline database statistics
 4. Create backup and verify integrity
-5. Display backup statistics and location
+5. Copy backup to host filesystem (unless `--no-copy` is specified)
+6. Display backup statistics and location
 
 **Import Command:**
 
@@ -192,13 +200,39 @@ Each command follows these patterns:
 2. Prompt for service and volume selection
 3. Collect baseline database statistics
 4. Create backup and verify integrity
-5. Stop and remove PostgreSQL service container
-6. Update image and rebuild service container
-7. Remove old data volume
-8. Start service with new PostgreSQL version
-9. Verify backup volume mounting
-10. Import data and verify upgrade restoration success
-11. Update collation version
+5. Copy backup to host filesystem (unless `--no-copy` is specified)
+6. Stop and remove PostgreSQL service container
+7. Update image and rebuild service container
+8. Remove old data volume
+9. Start service with new PostgreSQL version
+10. Verify backup volume mounting
+11. Import data and verify upgrade restoration success
+12. Update collation version
+
+### Backup File Management
+
+By default, both the `upgrade` and `export` commands automatically copy the created backup file from the Docker volume to your current working directory on the host filesystem. This provides an additional layer of data safety and allows for easy access to backup files.
+
+**Default Behavior (Automatic Copy):**
+- Backup files are automatically copied to the current directory
+- Original filename is preserved (e.g., `backup-20251001_165130.sql`)
+- Copy happens after backup verification succeeds
+- If copy fails, a warning is shown but the operation continues (backup remains in Docker volume)
+
+**Skip Copy with `--no-copy` Flag:**
+- Use `--no-copy` to keep backups only in Docker volumes
+- Useful for automated workflows or when disk space is limited on host
+- Backup remains accessible within the Docker volume for import operations
+
+**Example:**
+```bash
+# Default: Backup created in volume AND copied to current directory
+postgres-upgrader export
+# Output: ✅ Backup copied to: /path/to/current/dir/backup-20251001_165130.sql
+
+# With --no-copy: Backup only in Docker volume
+postgres-upgrader export --no-copy
+```
 
 ### Example Interactive Output
 

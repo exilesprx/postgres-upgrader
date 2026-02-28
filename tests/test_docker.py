@@ -1402,3 +1402,195 @@ class TestDockerManagerServiceLifecycle:
 
             with pytest.raises(Exception, match="Failed to remove volume"):
                 docker_mgr.remove_service_main_volume()
+
+
+class TestCopyBackupToHost:
+    """Test backup file copying from container to host."""
+
+    def setup_method(self):
+        """Set up test fixtures for each test method."""
+        self.service_config = ServiceConfig(
+            name="postgres",
+            volumes=[
+                VolumeMount(
+                    name="database",
+                    path="/var/lib/postgresql/data",
+                    raw="database:/var/lib/postgresql/data",
+                    resolved_name="test_database",
+                ),
+                VolumeMount(
+                    name="backups",
+                    path="/tmp/postgresql/backups",
+                    raw="backups:/tmp/postgresql/backups",
+                    resolved_name="test_backups",
+                ),
+            ],
+        )
+        self.service_config.selected_main_volume = self.service_config.volumes[0]
+        self.service_config.selected_backup_volume = self.service_config.volumes[1]
+
+    @patch("postgres_upgrader.docker.docker.from_env")
+    @patch("postgres_upgrader.docker.tarfile.open")
+    @patch("postgres_upgrader.docker.Path")
+    def test_copy_backup_to_host_success(
+        self, mock_path_class, mock_tarfile_open, mock_docker
+    ):
+        """Test successful backup copy to host filesystem."""
+
+        # Mock Docker client and container
+        mock_client = MagicMock()
+        mock_docker.return_value = mock_client
+        mock_container = MagicMock()
+        mock_container.name = "test_postgres"
+        mock_client.containers.list.return_value = [mock_container]
+
+        # Mock get_archive to return tar stream
+        mock_container.get_archive.return_value = (
+            [b"fake tar content"],
+            {"name": "backup-20240101_120000.sql"},
+        )
+
+        # Mock tarfile operations
+        mock_tar = MagicMock()
+        mock_tarfile_open.return_value.__enter__.return_value = mock_tar
+        mock_member = MagicMock()
+        mock_member.name = "backup-20240101_120000.sql"
+        mock_tar.getmembers.return_value = [mock_member]
+
+        # Mock Path operations
+        mock_path_instance = MagicMock()
+        mock_path_instance.name = "backup-20240101_120000.sql"
+        mock_resolved_path = MagicMock()
+        mock_resolved_path.parent = "/fake/path"
+        mock_resolved_path.__truediv__ = lambda self, other: MagicMock(
+            __str__=lambda _: f"/fake/path/{other}"
+        )
+        mock_path_instance.resolve.return_value = mock_resolved_path
+        mock_path_class.return_value = mock_path_instance
+
+        with DockerManager(
+            "test_project", self.service_config, "postgres", "testuser", "testdb"
+        ) as docker_mgr:
+            result = docker_mgr.copy_backup_to_host(
+                "/tmp/postgresql/backups/backup-20240101_120000.sql"
+            )
+
+            # Verify successful copy
+            assert result is not None
+            assert "backup-20240101_120000.sql" in result
+            mock_container.get_archive.assert_called_once_with(
+                "/tmp/postgresql/backups/backup-20240101_120000.sql"
+            )
+            mock_tar.extract.assert_called_once()
+
+    @patch("postgres_upgrader.docker.docker.from_env")
+    def test_copy_backup_to_host_container_not_found(self, mock_docker):
+        """Test copy returns None when container not found."""
+        mock_client = MagicMock()
+        mock_docker.return_value = mock_client
+        mock_client.containers.list.return_value = []  # No containers
+
+        with DockerManager(
+            "test_project", self.service_config, "postgres", "testuser", "testdb"
+        ) as docker_mgr:
+            result = docker_mgr.copy_backup_to_host("/tmp/backup.sql")
+
+            # Should return None on failure (non-critical)
+            assert result is None
+
+    @patch("postgres_upgrader.docker.docker.from_env")
+    def test_copy_backup_to_host_get_archive_fails(self, mock_docker):
+        """Test copy returns None when get_archive fails."""
+        mock_client = MagicMock()
+        mock_docker.return_value = mock_client
+        mock_container = MagicMock()
+        mock_container.name = "test_postgres"
+        mock_client.containers.list.return_value = [mock_container]
+
+        # Simulate get_archive failure
+        mock_container.get_archive.side_effect = Exception("File not found")
+
+        with DockerManager(
+            "test_project", self.service_config, "postgres", "testuser", "testdb"
+        ) as docker_mgr:
+            result = docker_mgr.copy_backup_to_host("/tmp/nonexistent.sql")
+
+            # Should return None on failure (non-critical)
+            assert result is None
+
+    @patch("postgres_upgrader.docker.docker.from_env")
+    @patch("postgres_upgrader.docker.tarfile.open")
+    def test_copy_backup_to_host_empty_archive(self, mock_tarfile_open, mock_docker):
+        """Test copy returns None when tar archive is empty."""
+        mock_client = MagicMock()
+        mock_docker.return_value = mock_client
+        mock_container = MagicMock()
+        mock_container.name = "test_postgres"
+        mock_client.containers.list.return_value = [mock_container]
+
+        mock_container.get_archive.return_value = (
+            [b"fake empty tar"],
+            {"name": "backup.sql"},
+        )
+
+        # Mock tarfile to return empty members list
+        mock_tar = MagicMock()
+        mock_tarfile_open.return_value.__enter__.return_value = mock_tar
+        mock_tar.getmembers.return_value = []  # Empty archive
+
+        with DockerManager(
+            "test_project", self.service_config, "postgres", "testuser", "testdb"
+        ) as docker_mgr:
+            result = docker_mgr.copy_backup_to_host("/tmp/backup.sql")
+
+            # Should return None when archive is empty
+            assert result is None
+
+    @patch("postgres_upgrader.docker.docker.from_env")
+    @patch("postgres_upgrader.docker.tarfile.open")
+    @patch("postgres_upgrader.docker.Path")
+    def test_copy_backup_to_host_custom_destination(
+        self, mock_path_class, mock_tarfile_open, mock_docker
+    ):
+        """Test copy with custom destination directory."""
+        # Mock Docker client and container
+        mock_client = MagicMock()
+        mock_docker.return_value = mock_client
+        mock_container = MagicMock()
+        mock_container.name = "test_postgres"
+        mock_client.containers.list.return_value = [mock_container]
+
+        # Mock get_archive
+        mock_container.get_archive.return_value = (
+            [b"fake tar content"],
+            {"name": "backup.sql"},
+        )
+
+        # Mock tarfile operations
+        mock_tar = MagicMock()
+        mock_tarfile_open.return_value.__enter__.return_value = mock_tar
+        mock_member = MagicMock()
+        mock_tar.getmembers.return_value = [mock_member]
+
+        # Mock Path operations
+        mock_path_instance = MagicMock()
+        mock_path_instance.name = "backup.sql"
+        mock_resolved_path = MagicMock()
+        mock_resolved_path.parent = "/custom/destination"
+        mock_resolved_path.__truediv__ = lambda self, other: MagicMock(
+            __str__=lambda _: f"/custom/destination/{other}"
+        )
+        mock_path_instance.resolve.return_value = mock_resolved_path
+        mock_path_class.return_value = mock_path_instance
+
+        with DockerManager(
+            "test_project", self.service_config, "postgres", "testuser", "testdb"
+        ) as docker_mgr:
+            result = docker_mgr.copy_backup_to_host(
+                "/tmp/backup.sql", destination_dir="/custom/path"
+            )
+
+            # Verify custom destination was used
+            assert result is not None
+            assert "backup.sql" in result
+            mock_tar.extract.assert_called_once()

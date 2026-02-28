@@ -1,6 +1,9 @@
+import io
 import subprocess
+import tarfile
 import time
 from datetime import datetime
+from pathlib import Path
 from types import TracebackType
 from typing import TYPE_CHECKING, Union
 
@@ -121,6 +124,66 @@ class DockerManager:
             )
 
         return backup_path
+
+    def copy_backup_to_host(
+        self, backup_path: str, destination_dir: str = "."
+    ) -> str | None:
+        """
+        Copy backup file from container to host filesystem.
+
+        Uses Docker SDK's get_archive() to extract the backup file from the
+        container and write it to the specified destination directory.
+
+        Args:
+            backup_path: Full path to backup file inside container
+            destination_dir: Directory on host to copy file to (default: current dir)
+
+        Returns:
+            str: Absolute path to copied file on host, or None if failed
+
+        Note:
+            Logs are minimal. Returns None on failure (non-critical error).
+        """
+        if not self.client:
+            return None
+
+        try:
+            # Find the container
+            container = self.find_container_by_service()
+
+            # Get the archive from the container
+            bits, _ = container.get_archive(backup_path)
+
+            # Extract filename from path
+            filename = Path(backup_path).name
+
+            # Prepare destination path
+            destination_path = Path(destination_dir).resolve() / filename
+
+            # Create a tar stream from the bits
+            tar_stream = io.BytesIO()
+            for chunk in bits:
+                tar_stream.write(chunk)
+            tar_stream.seek(0)
+
+            # Extract the file from the tar archive
+            with tarfile.open(fileobj=tar_stream) as tar:
+                # Get the file member
+                members = tar.getmembers()
+                if not members:
+                    return None
+
+                # Extract to destination directory
+                # The tar archive contains the file with just its basename
+                member = members[0]
+                member.name = filename  # Ensure correct filename
+                tar.extract(member, path=str(destination_path.parent))
+
+            return str(destination_path)
+
+        except Exception:
+            # Return None on any failure (non-critical)
+            return None
 
     def stop_service_container(self) -> None:
         """
