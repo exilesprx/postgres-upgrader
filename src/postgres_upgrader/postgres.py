@@ -43,7 +43,7 @@ class Postgres:
         """
         self.console = console
 
-    def handle_export_command(self, args: Namespace) -> None:
+    def handle_export_command(self, _args: Namespace) -> None:
         """
         Handle the export command to create a PostgreSQL backup.
 
@@ -51,7 +51,7 @@ class Postgres:
         integrity, and displays statistics about the backup process.
 
         Args:
-            args: Command line arguments (supports --no-copy flag)
+            _args: Command line arguments (supports --no-copy flag)
 
         Raises:
             Exception: If service is not configured for PostgreSQL export
@@ -70,7 +70,7 @@ class Postgres:
             _, backup_path, _ = self._create_backup_workflow(docker_mgr)
 
             # Copy backup to host unless --no-copy flag is set
-            if not getattr(args, "no_copy", False):
+            if not getattr(_args, "no_copy", False):
                 host_path = docker_mgr.copy_backup_to_host(backup_path)
                 if host_path:
                     self.console.print(
@@ -130,7 +130,7 @@ class Postgres:
 
             self._import_workflow_with_container(docker_mgr, container, file, database)
 
-    def handle_upgrade_command(self, args: Namespace) -> None:
+    def handle_upgrade_command(self, _args: Namespace) -> None:
         """
         Execute the complete PostgreSQL upgrade workflow.
 
@@ -149,7 +149,7 @@ class Postgres:
         12. Update collation version for the database
 
         Args:
-            args: Command line arguments (supports --no-copy flag)
+            _args: Command line arguments (supports --no-copy flag)
 
         Raises:
             Exception: If service is not configured for PostgreSQL upgrade
@@ -172,7 +172,7 @@ class Postgres:
 
             # Copy backup to host unless --no-copy flag is set
             host_backup_path = None
-            if not getattr(args, "no_copy", False):
+            if not getattr(_args, "no_copy", False):
                 host_backup_path = docker_mgr.copy_backup_to_host(backup_path)
                 if host_backup_path:
                     self.console.print(
@@ -202,7 +202,7 @@ class Postgres:
             )
 
             # Show warning if backup copy failed
-            if not getattr(args, "no_copy", False) and not host_backup_path:
+            if not getattr(_args, "no_copy", False) and not host_backup_path:
                 self.console.print(
                     "⚠️  Note: Backup was not copied to host, but is available in Docker volume.",
                     style="yellow",
