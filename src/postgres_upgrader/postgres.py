@@ -43,7 +43,7 @@ class Postgres:
         """
         self.console = console
 
-    def handle_export_command(self, _args: Namespace) -> None:
+    def handle_export_command(self, args: Namespace) -> None:
         """
         Handle the export command to create a PostgreSQL backup.
 
@@ -51,7 +51,7 @@ class Postgres:
         integrity, and displays statistics about the backup process.
 
         Args:
-            args: Command line arguments (currently unused)
+            args: Command line arguments (supports --no-copy flag)
 
         Raises:
             Exception: If service is not configured for PostgreSQL export
@@ -67,7 +67,21 @@ class Postgres:
         with DockerManager(
             compose_config.name, selected_service, container_user, user, database
         ) as docker_mgr:
-            _, _, _ = self._create_backup_workflow(docker_mgr)
+            _, backup_path, _ = self._create_backup_workflow(docker_mgr)
+
+            # Copy backup to host unless --no-copy flag is set
+            if not getattr(args, "no_copy", False):
+                host_path = docker_mgr.copy_backup_to_host(backup_path)
+                if host_path:
+                    self.console.print(
+                        f"✅ Backup copied to: {host_path}", style="bold green"
+                    )
+                else:
+                    self.console.print(
+                        "⚠️  Warning: Failed to copy backup to host. "
+                        "Backup still available in Docker volume.",
+                        style="yellow",
+                    )
 
     def handle_import_command(self, _args: Namespace) -> None:
         """
@@ -116,7 +130,7 @@ class Postgres:
 
             self._import_workflow_with_container(docker_mgr, container, file, database)
 
-    def handle_upgrade_command(self, _args: Namespace) -> None:
+    def handle_upgrade_command(self, args: Namespace) -> None:
         """
         Execute the complete PostgreSQL upgrade workflow.
 
@@ -124,17 +138,18 @@ class Postgres:
         1. Get baseline database statistics
         2. Create backup of current database
         3. Verify backup integrity
-        4. Stop the PostgreSQL service container
-        5. Update and build the service with new PostgreSQL version
-        6. Remove the old data volume
-        7. Start the service with new PostgreSQL version
-        8. Verify backup volume is mounted
-        9. Import data from the backup into the new database
-        10. Verify import success
-        11. Update collation version for the database
+        4. Copy backup to host (unless --no-copy flag is set)
+        5. Stop the PostgreSQL service container
+        6. Update and build the service with new PostgreSQL version
+        7. Remove the old data volume
+        8. Start the service with new PostgreSQL version
+        9. Verify backup volume is mounted
+        10. Import data from the backup into the new database
+        11. Verify import success
+        12. Update collation version for the database
 
         Args:
-            args: Command line arguments (currently unused)
+            args: Command line arguments (supports --no-copy flag)
 
         Raises:
             Exception: If service is not configured for PostgreSQL upgrade
@@ -154,6 +169,15 @@ class Postgres:
             original_stats, backup_path, backup_stats = self._create_backup_workflow(
                 docker_mgr
             )
+
+            # Copy backup to host unless --no-copy flag is set
+            host_backup_path = None
+            if not getattr(args, "no_copy", False):
+                host_backup_path = docker_mgr.copy_backup_to_host(backup_path)
+                if host_backup_path:
+                    self.console.print(
+                        f"✅ Backup copied to: {host_backup_path}", style="bold green"
+                    )
 
             docker_mgr.stop_service_container()
             docker_mgr.remove_service_container()
@@ -176,6 +200,13 @@ class Postgres:
             self.console.print(
                 "  PostgreSQL upgrade completed successfully!", style="bold green"
             )
+
+            # Show warning if backup copy failed
+            if not getattr(args, "no_copy", False) and not host_backup_path:
+                self.console.print(
+                    "⚠️  Note: Backup was not copied to host, but is available in Docker volume.",
+                    style="yellow",
+                )
 
     def _create_backup_workflow(
         self, docker_mgr: "DockerManager"

@@ -60,13 +60,22 @@ Examples:
   %(prog)s upgrade                    # Run full PostgreSQL upgrade workflow
   %(prog)s export                     # Create backup only
   %(prog)s import                     # Import from existing backup
+  %(prog)s upgrade --no-copy          # Upgrade without copying backup to host
         """,
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     for command_def in commands:
-        _ = subparsers.add_parser(command_def.name, help=command_def.help_text)
+        subparser = subparsers.add_parser(command_def.name, help=command_def.help_text)
+
+        # Add --no-copy flag to upgrade and export commands
+        if command_def.name in ("upgrade", "export"):
+            subparser.add_argument(
+                "--no-copy",
+                action="store_true",
+                help="Do not copy backup file to host filesystem (backup remains in Docker volume)",
+            )
 
     return parser
 
