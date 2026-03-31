@@ -2,10 +2,10 @@ import io
 import subprocess
 import tarfile
 import time
+from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
 from types import TracebackType
-from collections.abc import Iterator
 from typing import TYPE_CHECKING, Union
 
 import docker
