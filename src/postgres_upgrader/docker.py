@@ -5,6 +5,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 from types import TracebackType
+from collections.abc import Iterator
 from typing import TYPE_CHECKING, Union
 
 import docker
@@ -12,6 +13,23 @@ from docker.models.containers import Container
 
 if TYPE_CHECKING:
     from .compose_inspector import ServiceConfig, VolumeMount
+
+
+def _decode_output(output: bytes | Iterator[bytes]) -> str:
+    """Decode exec_run output to a UTF-8 string.
+
+    exec_run() returns ``bytes`` when ``stream=False`` (the default).
+    The return type in the docker-stubs is ``bytes | Iterator[bytes]``
+    because it can also return an iterator when ``stream=True``.  All
+    callers in this module use the default (non-streaming) mode, so we
+    assert the runtime invariant here rather than suppressing the error
+    with ``type: ignore``.
+    """
+    assert isinstance(output, bytes), (
+        f"Expected bytes from exec_run output, got {type(output)!r}. "
+        "Did you accidentally pass stream=True?"
+    )
+    return output.decode("utf-8")
 
 
 class DockerManager:
@@ -120,7 +138,7 @@ class DockerManager:
 
         if exit_code != 0:
             raise Exception(
-                f"pg_dump failed with exit code {exit_code}: {output.decode('utf-8')}"
+                f"pg_dump failed with exit code {exit_code}: {_decode_output(output)}"
             )
 
         return backup_path
@@ -428,7 +446,7 @@ class DockerManager:
         exit_code, output = container.exec_run(cmd, user=self.container_user)
         if exit_code != 0:
             raise Exception(
-                f"Import failed with exit code {exit_code}: {output.decode('utf-8')}"
+                f"Import failed with exit code {exit_code}: {_decode_output(output)}"
             )
 
     def update_collation_version(self) -> bool:
@@ -463,7 +481,7 @@ class DockerManager:
         exit_code, output = container.exec_run(cmd, user=self.container_user)
         if exit_code != 0:
             raise Exception(
-                f"Collation update failed {exit_code}: {output.decode('utf-8')}"
+                f"Collation update failed {exit_code}: {_decode_output(output)}"
             )
 
         return False
@@ -597,7 +615,7 @@ class DockerManager:
         if exit_code != 0:
             raise Exception(f"Backup file {backup_path} not found or inaccessible")
 
-        file_size = int(output.decode("utf-8").strip())
+        file_size = int(_decode_output(output).strip())
         if file_size == 0:
             raise Exception("Backup file is empty")
 
@@ -607,14 +625,14 @@ class DockerManager:
         if exit_code != 0:
             raise Exception("Cannot read backup file header")
 
-        header = output.decode("utf-8")
+        header = _decode_output(output)
         if "PostgreSQL database dump" not in header:
             raise Exception("Backup file does not appear to be a valid PostgreSQL dump")
 
         # Count approximate number of tables/schemas in backup
         cmd = ["grep", "-c", "CREATE TABLE", backup_path]
         exit_code, output = container.exec_run(cmd, user=self.container_user)
-        table_count = int(output.decode("utf-8").strip()) if exit_code == 0 else 0
+        table_count = int(_decode_output(output).strip()) if exit_code == 0 else 0
 
         return {
             "file_size_bytes": file_size,
@@ -649,7 +667,7 @@ class DockerManager:
             if exit_code != 0:
                 raise Exception(f"Volume {volume.name} is not mounted in container")
 
-            return output.decode("utf-8").strip().split("\n")  # type: ignore[no-any-return]
+            return _decode_output(output).strip().split("\n")
         except subprocess.CalledProcessError:
             return None
 
@@ -701,9 +719,9 @@ class DockerManager:
         ]
         exit_code, output = container.exec_run(cmd, user=self.container_user)
         if exit_code != 0:
-            raise Exception(f"Failed to get table count: {output.decode('utf-8')}")
+            raise Exception(f"Failed to get table count: {_decode_output(output)}")
 
-        table_count = int(output.decode("utf-8").strip())
+        table_count = int(_decode_output(output).strip())
 
         # Get total row count estimate - using single line SQL
         sql_row_estimate = "SELECT COALESCE(SUM(n_tup_ins + n_tup_upd), 0) as total_rows FROM pg_stat_user_tables;"
@@ -720,7 +738,7 @@ class DockerManager:
         exit_code, output = container.exec_run(cmd, user=self.container_user)
         row_estimate = 0
         if exit_code == 0:
-            result = output.decode("utf-8").strip()
+            result = _decode_output(output).strip()
             row_estimate = int(result) if result and result != "" else 0
 
         # Get database size
@@ -738,7 +756,7 @@ class DockerManager:
             sql_db_size,
         ]
         exit_code, output = container.exec_run(cmd, user=self.container_user)
-        db_size = output.decode("utf-8").strip() if exit_code == 0 else "unknown"
+        db_size = _decode_output(output).strip() if exit_code == 0 else "unknown"
 
         return {
             "table_count": table_count,
