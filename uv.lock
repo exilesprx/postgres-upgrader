@@ -774,16 +774,16 @@ wheels = [
 
 [[package]]
 name = "types-docker"
-version = "7.1.0.20260408"
+version = "7.1.0.20260409"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "types-paramiko" },
     { name = "types-requests" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/89/70/5406e28f7f33e05e9086ac3e8af8b4c4804a559c093f1d983a2b13f7f338/types_docker-7.1.0.20260408.tar.gz", hash = "sha256:9ee4adc1cdef10482bcb3a44f964e5ced3f52d2cf273547913f5e5ccbb3d691f", size = 33292, upload-time = "2026-04-08T04:37:11.027Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/4f/86/5abab4ff44314668c8a863cb0e492e88c14124ce405ed9967bdffc26b7d7/types_docker-7.1.0.20260409.tar.gz", hash = "sha256:3dfed52b1534841a4d422d73f1909cbbc28425c02cfd9ec7948e7ea774d08991", size = 33709, upload-time = "2026-04-09T04:22:46.512Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/32/23/4b62cc11a0d23e6166259f9e91ef1debc4bf65dc61eb763880e691750979/types_docker-7.1.0.20260408-py3-none-any.whl", hash = "sha256:78d20064c314ab8c86256b78efcfaa8b989e1d0c0bf3f3405e2f067e07a63fca", size = 47703, upload-time = "2026-04-08T04:37:09.817Z" },
+    { url = "https://files.pythonhosted.org/packages/ba/97/cca7305de4d151452738a47d26fef88ce4acbd33ef36d0220e21b1cdf324/types_docker-7.1.0.20260409-py3-none-any.whl", hash = "sha256:83754caf2487e48ff18ff3b99bbd9e9c50565dce56374f61208388d6c95fbbeb", size = 48229, upload-time = "2026-04-09T04:22:45.189Z" },
 ]
 
 [[package]]
