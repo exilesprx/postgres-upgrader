@@ -126,7 +126,7 @@ dev = [
     "pytest-cov>=5.0.0",
     "ruff>=0.15.13",
     "mypy>=2.1.0",
-    "types-pyyaml>=6.0.12.20260510",
+    "types-pyyaml>=6.0.12.20260518",
     "pre-commit>=4.6.0",
     "types-docker>=7.1.0.20260512",
 ]
