@@ -122,7 +122,7 @@ directory = "htmlcov"
 
 [dependency-groups]
 dev = [
-    "pytest>=8.4.2",
+    "pytest>=9.1.0",
     "pytest-cov>=5.0.0",
     "ruff>=0.15.17",
     "mypy>=2.1.0",
