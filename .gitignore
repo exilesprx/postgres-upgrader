@@ -22,3 +22,5 @@ docker-compose.*.yml
 
 # Sql file for testing
 example.sql
+
+.specs
