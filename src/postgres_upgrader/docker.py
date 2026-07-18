@@ -1,4 +1,5 @@
 import io
+import logging
 import subprocess
 import tarfile
 import time
@@ -14,6 +15,18 @@ from docker.models.containers import Container
 if TYPE_CHECKING:
     from .compose_inspector import ServiceConfig, VolumeMount
 
+logger = logging.getLogger(__name__)
+
+
+def _quote_identifier(name: str) -> str:
+    """Double-quote a PostgreSQL identifier, escaping internal double quotes."""
+    return f'"{name.replace(chr(34), chr(34) * 2)}"'
+
+
+def _quote_literal(name: str) -> str:
+    """Single-quote a PostgreSQL string literal, escaping internal single quotes."""
+    return f"'{name.replace(chr(39), chr(39) * 2)}'"
+
 
 def _decode_output(output: bytes | Iterator[bytes]) -> str:
     """Decode exec_run output to a UTF-8 string.
@@ -25,10 +38,11 @@ def _decode_output(output: bytes | Iterator[bytes]) -> str:
     assert the runtime invariant here rather than suppressing the error
     with ``type: ignore``.
     """
-    assert isinstance(output, bytes), (
-        f"Expected bytes from exec_run output, got {type(output)!r}. "
-        "Did you accidentally pass stream=True?"
-    )
+    if not isinstance(output, bytes):
+        raise TypeError(
+            f"Expected bytes from exec_run output, got {type(output)!r}. "
+            "Did you accidentally pass stream=True?"
+        )
     return output.decode("utf-8")
 
 
@@ -199,8 +213,9 @@ class DockerManager:
 
             return str(destination_path)
 
-        except Exception:
+        except Exception as e:
             # Return None on any failure (non-critical)
+            logger.warning("Failed to copy backup to host: %s", e)
             return None
 
     def stop_service_container(self) -> None:
@@ -449,16 +464,13 @@ class DockerManager:
                 f"Import failed with exit code {exit_code}: {_decode_output(output)}"
             )
 
-    def update_collation_version(self) -> bool:
+    def update_collation_version(self) -> None:
         """
         Update collation version for the PostgreSQL database after upgrade.
 
         PostgreSQL major version upgrades may require updating collation versions
         to ensure compatibility with the new version's locale and collation system.
         This method refreshes the collation version for the configured database.
-
-        Returns:
-            bool: Always returns False (legacy behavior)
 
         Raises:
             Exception: If container not found, collation update fails, or SQL execution error
@@ -476,15 +488,13 @@ class DockerManager:
             "-d",
             self.database_name,
             "-Atc",
-            f"ALTER DATABASE {self.database_name} REFRESH COLLATION VERSION;",
+            f"ALTER DATABASE {_quote_identifier(self.database_name)} REFRESH COLLATION VERSION;",
         ]
         exit_code, output = container.exec_run(cmd, user=self.container_user)
         if exit_code != 0:
             raise Exception(
                 f"Collation update failed {exit_code}: {_decode_output(output)}"
             )
-
-        return False
 
     def find_container_by_service(self) -> Container:
         """
@@ -658,18 +668,15 @@ class DockerManager:
             Exception: If DockerManager is not properly initialized or
             container cannot be found.
         """
-        try:
-            exit_code, output = container.exec_run(
-                ["find", volume.path, "-maxdepth", "1", "-type", "f", "-print"],
-                user="root",
-            )
+        exit_code, output = container.exec_run(
+            ["find", volume.path, "-maxdepth", "1", "-type", "f", "-print"],
+            user="root",
+        )
 
-            if exit_code != 0:
-                raise Exception(f"Volume {volume.name} is not mounted in container")
+        if exit_code != 0:
+            raise Exception(f"Volume {volume.name} is not mounted in container")
 
-            return _decode_output(output).strip().split("\n")
-        except subprocess.CalledProcessError:
-            return None
+        return _decode_output(output).strip().split("\n")
 
     def get_database_statistics(
         self, container: Container
@@ -742,9 +749,7 @@ class DockerManager:
             row_estimate = int(result) if result and result != "" else 0
 
         # Get database size
-        sql_db_size = (
-            f"SELECT pg_size_pretty(pg_database_size('{self.database_name}'));"
-        )
+        sql_db_size = f"SELECT pg_size_pretty(pg_database_size({_quote_literal(self.database_name)}));"
         cmd = [
             "psql",
             "-U",

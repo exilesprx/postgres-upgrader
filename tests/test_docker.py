@@ -9,6 +9,7 @@ import docker
 import pytest
 
 from postgres_upgrader import DockerManager, ServiceConfig, VolumeMount
+from postgres_upgrader.docker import _quote_identifier, _quote_literal
 
 
 class TestDockerManager:
@@ -1594,3 +1595,60 @@ class TestCopyBackupToHost:
             assert result is not None
             assert "backup.sql" in result
             mock_tar.extract.assert_called_once()
+
+    @patch("postgres_upgrader.docker.docker.from_env")
+    def test_copy_backup_to_host_logs_warning(self, mock_docker):
+        """Test copy logs a warning when an internal operation raises."""
+        mock_client = MagicMock()
+        mock_docker.return_value = mock_client
+        mock_container = MagicMock()
+        mock_container.name = "test_postgres"
+        mock_client.containers.list.return_value = [mock_container]
+        mock_container.get_archive.side_effect = Exception("Archive error")
+
+        with (
+            DockerManager(
+                "test_project", self.service_config, "postgres", "testuser", "testdb"
+            ) as docker_mgr,
+            patch("postgres_upgrader.docker.logger") as mock_logger,
+        ):
+            result = docker_mgr.copy_backup_to_host("/tmp/backup.sql")
+
+            assert result is None
+            mock_logger.warning.assert_called_once()
+            assert (
+                "Failed to copy backup to host" in mock_logger.warning.call_args[0][0]
+            )
+
+
+class TestSqlQuotingHelpers:
+    """Test SQL identifier and literal quoting functions."""
+
+    def test_quote_identifier_simple(self):
+        assert _quote_identifier("mydb") == '"mydb"'
+
+    def test_quote_identifier_with_spaces(self):
+        assert _quote_identifier("my db") == '"my db"'
+
+    def test_quote_identifier_with_double_quotes(self):
+        assert _quote_identifier('my"db') == '"my""db"'
+
+    def test_quote_identifier_empty(self):
+        assert _quote_identifier("") == '""'
+
+    def test_quote_literal_simple(self):
+        assert _quote_literal("mydb") == "'mydb'"
+
+    def test_quote_literal_with_single_quotes(self):
+        assert _quote_literal("it's") == "'it''s'"
+
+    def test_quote_literal_empty(self):
+        assert _quote_literal("") == "''"
+
+    def test_quote_identifier_special_chars(self):
+        result = _quote_identifier("db-name_123")
+        assert result == '"db-name_123"'
+
+    def test_quote_literal_special_chars(self):
+        result = _quote_literal("test; DROP TABLE")
+        assert result == "'test; DROP TABLE'"

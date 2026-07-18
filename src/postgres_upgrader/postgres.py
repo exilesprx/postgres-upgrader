@@ -345,8 +345,9 @@ class Postgres:
             )
 
         container_user = prompt_container_user()
-        if not container_user:
+        if not container_user or not container_user.strip():
             raise Exception("A valid container user is required to proceed")
+        container_user = container_user.strip()
 
         return compose_config, selected_service, container_user, user, database
 

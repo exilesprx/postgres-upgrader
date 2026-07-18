@@ -188,9 +188,6 @@ def parse_docker_compose() -> DockerComposeConfig:
     - Volumes without proper definitions in the volumes section
     - Incomplete volume configurations
 
-    Args:
-        file_path: Ignored. Kept for API compatibility only.
-
     Returns:
         DockerComposeConfig with resolved and validated values
 

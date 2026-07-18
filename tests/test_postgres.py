@@ -601,14 +601,13 @@ class TestPostgresIntegration:
 
         assert "A valid container user is required to proceed" in str(exc_info.value)
 
-    @patch("postgres_upgrader.postgres.DockerManager")
     @patch("postgres_upgrader.postgres.prompt_container_user")
     @patch("postgres_upgrader.postgres.identify_service_volumes")
     @patch("postgres_upgrader.postgres.parse_docker_compose")
     def test_workflow_with_whitespace_only_container_user(
-        self, mock_parse, mock_identify, mock_prompt, mock_docker_manager
+        self, mock_parse, mock_identify, mock_prompt
     ):
-        """Test handle_upgrade_command handles whitespace-only container user."""
+        """Test handle_upgrade_command rejects whitespace-only container user."""
         mock_compose_config = Mock()
         mock_compose_config.name = "test_project"
         mock_parse.return_value = mock_compose_config
@@ -620,32 +619,13 @@ class TestPostgresIntegration:
 
         mock_prompt.return_value = "   "  # Whitespace only
 
-        # Mock DockerManager since whitespace passes the truthiness check
-        mock_docker_instance = Mock()
-        mock_docker_instance.get_database_statistics.return_value = {
-            "table_count": 5,
-            "database_size": "25 MB",
-            "estimated_total_rows": 1000,
-        }
-        mock_docker_instance.create_postgres_backup.return_value = "/tmp/backup.sql"
-        mock_docker_instance.verify_backup_integrity.return_value = {
-            "file_size_bytes": 12345,
-            "estimated_table_count": 5,
-        }
-        mock_container = Mock()
-        mock_docker_instance.start_service_container.return_value = mock_container
-        mock_docker_manager.return_value.__enter__.return_value = mock_docker_instance
-
-        with patch.object(
-            self.postgres, "_get_credentials", return_value=("testuser", "testdb")
+        with (
+            patch.object(
+                self.postgres, "_get_credentials", return_value=("testuser", "testdb")
+            ),
+            pytest.raises(Exception, match="A valid container user is required"),
         ):
-            # This should actually succeed since "   " is truthy
             self.postgres.handle_upgrade_command(Mock())
-
-        # Verify DockerManager was called with the whitespace string
-        mock_docker_manager.assert_called_once_with(
-            "test_project", mock_service, "   ", "testuser", "testdb"
-        )
 
 
 class TestPostgresHelperMethods:
