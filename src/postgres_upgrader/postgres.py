@@ -183,6 +183,19 @@ class Postgres:
             docker_mgr.remove_service_container()
             docker_mgr.update_service_container()
             docker_mgr.build_service_container()
+
+            main_volume = selected_service.get_main_volume()
+            if not main_volume:
+                raise Exception("Main volume not selected")
+            self.console.print(
+                f"⚠️  WARNING: You are about to permanently remove volume '{main_volume.resolved_name}'. This action is irreversible.",
+                style="bold yellow",
+            )
+            confirm = prompt_user_choice(
+                ["yes", "no"], "Are you sure you want to remove this volume?"
+            )
+            if confirm != "yes":
+                raise Exception("Volume removal cancelled by user")
             docker_mgr.remove_service_main_volume()
 
             container = self._import_workflow(docker_mgr, backup_path, database)
@@ -262,7 +275,7 @@ class Postgres:
         self.console.print(
             f"  Importing data from backup into database '{database}'..."
         )
-        docker_mgr.import_data_from_backup(backup_path)
+        docker_mgr.import_data_from_backup(backup_path, container)
         docker_mgr.update_collation_version()
         self.console.print("  Import completed successfully!", style="bold green")
         return container
@@ -289,7 +302,7 @@ class Postgres:
         self.console.print(
             f"  Importing data from backup into database '{database}'..."
         )
-        docker_mgr.import_data_from_backup(backup_path)
+        docker_mgr.import_data_from_backup(backup_path, container)
         docker_mgr.update_collation_version()
 
         # Collect and display import statistics

@@ -308,12 +308,8 @@ class TestVolumeValidationEdgeCases:
         )
         service.select_volumes(main_vol, backup_vol)
 
-        # Should raise exception when trying to validate
-        with pytest.raises(
-            Exception,
-            match="You cannot use the default PostgreSQL data directory as a backup location",
-        ):
-            service.is_configured_for_postgres_upgrade()
+        # Should return False when backup path is the default PostgreSQL data directory
+        assert service.is_configured_for_postgres_upgrade() is False
 
     def test_backup_volume_exact_match_main_volume_path(self):
         """Test that backup volume with exact same path as main volume fails."""
