@@ -7,7 +7,7 @@ from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
 from types import TracebackType
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 
 import docker
 from docker.models.containers import Container
@@ -213,8 +213,8 @@ class DockerManager:
 
             return str(destination_path)
 
-        except Exception as e:
-            # Return None on any failure (non-critical)
+        except (docker.errors.NotFound, tarfile.TarError, OSError) as e:
+            # Return None on expected failures (non-critical)
             logger.warning("Failed to copy backup to host: %s", e)
             return None
 
@@ -427,7 +427,7 @@ class DockerManager:
         # Should never reach here as the loop either returns True or raises an exception
         return False
 
-    def import_data_from_backup(self, backup_path: str) -> None:
+    def import_data_from_backup(self, backup_path: str, container: Container | None = None) -> None:
         """
         Import PostgreSQL data from a backup file into the database.
 
@@ -452,7 +452,8 @@ class DockerManager:
         if not self.service_config.is_configured_for_postgres_upgrade():
             raise Exception("Service must have selected volumes for PostgreSQL upgrade")
 
-        container = self.find_container_by_service()
+        if container is None:
+            container = self.find_container_by_service()
         status_ok = self.check_container_status(container)
         if status_ok is False:
             raise Exception("Container is not healthy after restart")
@@ -640,7 +641,7 @@ class DockerManager:
             raise Exception("Backup file does not appear to be a valid PostgreSQL dump")
 
         # Count approximate number of tables/schemas in backup
-        cmd = ["grep", "-c", "CREATE TABLE", backup_path]
+        cmd = ["grep", "-cE", "CREATE TABLE", backup_path]
         exit_code, output = container.exec_run(cmd, user=self.container_user)
         table_count = int(_decode_output(output).strip()) if exit_code == 0 else 0
 
@@ -771,7 +772,7 @@ class DockerManager:
         }
 
     def _force_volume_reconnect(
-        self, container: Container, backup_volume: Union["VolumeMount", None]
+        self, container: Container, backup_volume: "VolumeMount | None"
     ) -> None:
         """
         Force volume reconnection without full container restart.
@@ -813,7 +814,7 @@ class DockerManager:
             raise Exception(f"Volume reconnection failed: {e}") from e
 
     def _check_backup_volume_health(
-        self, container: Container, backup_volume: Union["VolumeMount", None]
+        self, container: Container, backup_volume: "VolumeMount | None"
     ) -> bool:
         """
         Check if the backup volume is properly mounted and accessible.

@@ -326,11 +326,12 @@ class TestHandleUpgradeCommand:
         assert "A valid container user is required to proceed" in str(exc_info.value)
 
     @patch("postgres_upgrader.postgres.DockerManager")
+    @patch("postgres_upgrader.postgres.prompt_user_choice", return_value="yes")
     @patch("postgres_upgrader.postgres.prompt_container_user")
     @patch("postgres_upgrader.postgres.identify_service_volumes")
     @patch("postgres_upgrader.postgres.parse_docker_compose")
     def test_handle_upgrade_command_successful_workflow(
-        self, mock_parse, mock_identify, mock_prompt, mock_docker_manager
+        self, mock_parse, mock_identify, mock_prompt, mock_prompt_choice, mock_docker_manager
     ):
         """Test handle_upgrade_command executes successful complete workflow."""
         # Setup mocks for successful execution
@@ -378,7 +379,7 @@ class TestHandleUpgradeCommand:
         mock_docker_instance.stop_service_container.assert_called_once()
         mock_docker_instance.start_service_container.assert_called_once()
         mock_docker_instance.import_data_from_backup.assert_called_once_with(
-            "/tmp/backup.sql"
+            "/tmp/backup.sql", mock_container
         )
         mock_docker_instance.update_collation_version.assert_called_once()
 
@@ -504,11 +505,12 @@ class TestPostgresIntegration:
         self.postgres = Postgres(self.console)
 
     @patch("postgres_upgrader.postgres.DockerManager")
+    @patch("postgres_upgrader.postgres.prompt_user_choice", return_value="yes")
     @patch("postgres_upgrader.postgres.prompt_container_user")
     @patch("postgres_upgrader.postgres.identify_service_volumes")
     @patch("postgres_upgrader.postgres.parse_docker_compose")
     def test_end_to_end_workflow_simulation(
-        self, mock_parse, mock_identify, mock_prompt, mock_docker_manager
+        self, mock_parse, mock_identify, mock_prompt, mock_prompt_choice, mock_docker_manager
     ):
         """Test complete end-to-end workflow simulation with realistic data."""
         # Create realistic mock objects

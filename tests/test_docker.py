@@ -12,6 +12,22 @@ from postgres_upgrader import DockerManager, ServiceConfig, VolumeMount
 from postgres_upgrader.docker import _quote_identifier, _quote_literal
 
 
+@pytest.fixture
+def mock_docker_env():
+    """Provide a pre-configured mock Docker client and container."""
+    with patch("postgres_upgrader.docker.docker.from_env") as mock_docker:
+        mock_client = MagicMock()
+        mock_docker.return_value = mock_client
+
+        mock_container = MagicMock()
+        mock_container.name = "test_postgres"
+        mock_container.exec_run.return_value = (0, b"success")
+        mock_container.attrs = {"Mounts": []}
+        mock_client.containers.list.return_value = [mock_container]
+
+        yield mock_client, mock_container
+
+
 class TestDockerManager:
     """Test Docker Manager functionality."""
 
@@ -56,16 +72,13 @@ class TestDockerManager:
             ):
                 docker_mgr.create_postgres_backup()
 
-    def test_docker_manager_constructor_parameters(self):
+    def test_docker_manager_constructor_parameters(self, mock_docker_env):
         """Test that DockerManager constructor stores parameters correctly."""
         service_config = ServiceConfig(name="test")
 
-        with (
-            patch("postgres_upgrader.docker.docker.from_env"),
-            DockerManager(
-                "test_project", service_config, "postgres", "myuser", "mydb"
-            ) as docker_mgr,
-        ):
+        with DockerManager(
+            "test_project", service_config, "postgres", "myuser", "mydb"
+        ) as docker_mgr:
             assert docker_mgr.service_config == service_config
             assert docker_mgr.container_user == "postgres"
             assert docker_mgr.database_user == "myuser"
@@ -408,28 +421,26 @@ class TestDockerManagerErrorHandling:
             ):
                 docker_mgr.create_postgres_backup()
 
-    def test_context_manager_cleanup_on_error(self):
+    def test_context_manager_cleanup_on_error(self, mock_docker_env):
         """Test that context manager properly cleans up on errors."""
-        with patch("postgres_upgrader.docker.docker.from_env") as mock_docker:
-            mock_client = MagicMock()
-            mock_docker.return_value = mock_client
+        mock_client, _mock_container = mock_docker_env
 
-            # Test that __exit__ is called even when an exception occurs
-            try:
-                with DockerManager(
-                    "test_project",
-                    self.service_config,
-                    "postgres",
-                    "testuser",
-                    "testdb",
-                ) as _docker_mgr:
-                    # Simulate an error inside the context
-                    raise ValueError("Test error")
-            except ValueError:
-                pass  # Expected
+        # Test that __exit__ is called even when an exception occurs
+        try:
+            with DockerManager(
+                "test_project",
+                self.service_config,
+                "postgres",
+                "testuser",
+                "testdb",
+            ) as docker_mgr:
+                # Simulate an error inside the context
+                raise ValueError("Test error")
+        except ValueError:
+            pass  # Expected
 
-            # Verify the client was properly set up and would be cleaned up
-            assert mock_docker.called
+        # Verify the client was properly set up and would be cleaned up
+        assert docker_mgr.client is mock_client
 
     def test_multiple_containers_same_service(self):
         """Test behavior when multiple containers match the service name."""
@@ -1486,18 +1497,18 @@ class TestCopyBackupToHost:
 
     @patch("postgres_upgrader.docker.docker.from_env")
     def test_copy_backup_to_host_container_not_found(self, mock_docker):
-        """Test copy returns None when container not found."""
+        """Test copy raises when container not found (real error, not swallowed)."""
         mock_client = MagicMock()
         mock_docker.return_value = mock_client
         mock_client.containers.list.return_value = []  # No containers
 
-        with DockerManager(
-            "test_project", self.service_config, "postgres", "testuser", "testdb"
-        ) as docker_mgr:
-            result = docker_mgr.copy_backup_to_host("/tmp/backup.sql")
-
-            # Should return None on failure (non-critical)
-            assert result is None
+        with (
+            DockerManager(
+                "test_project", self.service_config, "postgres", "testuser", "testdb"
+            ) as docker_mgr,
+            pytest.raises(Exception, match="No containers found"),
+        ):
+            docker_mgr.copy_backup_to_host("/tmp/backup.sql")
 
     @patch("postgres_upgrader.docker.docker.from_env")
     def test_copy_backup_to_host_get_archive_fails(self, mock_docker):
@@ -1509,7 +1520,7 @@ class TestCopyBackupToHost:
         mock_client.containers.list.return_value = [mock_container]
 
         # Simulate get_archive failure
-        mock_container.get_archive.side_effect = Exception("File not found")
+        mock_container.get_archive.side_effect = docker.errors.NotFound("File not found")
 
         with DockerManager(
             "test_project", self.service_config, "postgres", "testuser", "testdb"
@@ -1604,7 +1615,7 @@ class TestCopyBackupToHost:
         mock_container = MagicMock()
         mock_container.name = "test_postgres"
         mock_client.containers.list.return_value = [mock_container]
-        mock_container.get_archive.side_effect = Exception("Archive error")
+        mock_container.get_archive.side_effect = docker.errors.NotFound("Archive error")
 
         with (
             DockerManager(
