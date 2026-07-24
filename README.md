@@ -326,10 +326,14 @@ data_volume = next((v for v in volumes if v.name == "database"), None)
 
 if backup_volume:
     print(f"Backup volume path: {backup_volume.path}")
-    print(f"Resolved volume name: {backup_volume.resolved_name}")  # e.g., "postgres-upgrader_backups"
+    print(
+        f"Resolved volume name: {backup_volume.resolved_name}"
+    )  # e.g., "postgres-upgrader_backups"
 if data_volume:
     print(f"Data volume path: {data_volume.path}")
-    print(f"Resolved volume name: {data_volume.resolved_name}")  # e.g., "postgres-upgrader_database"
+    print(
+        f"Resolved volume name: {data_volume.resolved_name}"
+    )  # e.g., "postgres-upgrader_database"
 ```
 
 #### Interactive Volume Selection
@@ -398,7 +402,9 @@ if selected_service:
     container_user = prompt_container_user()
 
     # Create backup using DockerManager with all required parameters
-    with DockerManager(compose_data.name, selected_service, container_user, user, database) as docker_mgr:
+    with DockerManager(
+        compose_data.name, selected_service, container_user, user, database
+    ) as docker_mgr:
         backup_path = docker_mgr.create_postgres_backup()
         print(f"Backup created: {backup_path}")
 ```
