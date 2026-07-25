@@ -5,8 +5,6 @@ Tests the actual building blocks that the application uses.
 
 from unittest.mock import patch
 
-import pytest
-
 from postgres_upgrader import (
     DockerComposeConfig,
     parse_docker_compose,
