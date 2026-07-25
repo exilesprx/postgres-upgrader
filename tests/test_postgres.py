@@ -331,7 +331,12 @@ class TestHandleUpgradeCommand:
     @patch("postgres_upgrader.postgres.identify_service_volumes")
     @patch("postgres_upgrader.postgres.parse_docker_compose")
     def test_handle_upgrade_command_successful_workflow(
-        self, mock_parse, mock_identify, mock_prompt, mock_prompt_choice, mock_docker_manager
+        self,
+        mock_parse,
+        mock_identify,
+        mock_prompt,
+        mock_prompt_choice,
+        mock_docker_manager,
     ):
         """Test handle_upgrade_command executes successful complete workflow."""
         # Setup mocks for successful execution
@@ -510,7 +515,12 @@ class TestPostgresIntegration:
     @patch("postgres_upgrader.postgres.identify_service_volumes")
     @patch("postgres_upgrader.postgres.parse_docker_compose")
     def test_end_to_end_workflow_simulation(
-        self, mock_parse, mock_identify, mock_prompt, mock_prompt_choice, mock_docker_manager
+        self,
+        mock_parse,
+        mock_identify,
+        mock_prompt,
+        mock_prompt_choice,
+        mock_docker_manager,
     ):
         """Test complete end-to-end workflow simulation with realistic data."""
         # Create realistic mock objects

@@ -427,7 +427,9 @@ class DockerManager:
         # Should never reach here as the loop either returns True or raises an exception
         return False
 
-    def import_data_from_backup(self, backup_path: str, container: Container | None = None) -> None:
+    def import_data_from_backup(
+        self, backup_path: str, container: Container | None = None
+    ) -> None:
         """
         Import PostgreSQL data from a backup file into the database.
 
