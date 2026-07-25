@@ -1520,7 +1520,9 @@ class TestCopyBackupToHost:
         mock_client.containers.list.return_value = [mock_container]
 
         # Simulate get_archive failure
-        mock_container.get_archive.side_effect = docker.errors.NotFound("File not found")
+        mock_container.get_archive.side_effect = docker.errors.NotFound(
+            "File not found"
+        )
 
         with DockerManager(
             "test_project", self.service_config, "postgres", "testuser", "testdb"
