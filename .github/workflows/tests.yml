@@ -8,14 +8,14 @@ on:
 
 jobs:
   quality-checks:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     strategy:
       matrix:
         python-version: ["3.13"]
 
     name: Quality Checks (Python ${{ matrix.python-version }})
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install UV
         run: pip install uv
@@ -40,6 +40,6 @@ jobs:
         run: |
           uv run pytest --cov=postgres_upgrader --cov-report=xml --cov-report=term-missing --tb=short
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
